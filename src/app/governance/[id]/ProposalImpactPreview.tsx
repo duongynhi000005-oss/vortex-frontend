@@ -1,27 +1,27 @@
 "use client";
 
 import { useSolvers } from "@/hooks/useSolvers";
-import { simulateBondThreshold } from "@/lib/governanceImpact";
-import type { GovernanceProposal } from "@/lib/governanceStore";
+import { getParameterImpactHandler, type ParameterImpactHandler } from "@/lib/governanceImpact";
+import type { GovernanceProposal, ParameterChange } from "@/lib/governanceStore";
 import { useTranslation } from "@/lib/i18n/I18nProvider";
 
 /**
- * Concrete "who would this affect" preview for a proposal. Only a minimum
- * solver bond change can be simulated from data the frontend already has;
- * every other proposal says so instead of guessing.
+ * Concrete "who would this affect" preview for a proposal. A parameter gets a
+ * preview only when `PARAMETER_IMPACT_REGISTRY` has a handler for it; every
+ * other proposal says so instead of guessing.
  */
 export function ProposalImpactPreview({ proposal }: { proposal: GovernanceProposal }) {
   const { t } = useTranslation();
   const change = proposal.parameterChange;
-  const isBondChange = change?.parameter === "minSolverBondUsd";
+  const handler = change ? getParameterImpactHandler(change.parameter) : undefined;
 
   return (
     <section aria-labelledby="impact-heading" className="pt-4 border-t border-vx-line space-y-1.5">
       <h3 id="impact-heading" className="text-xs font-semibold text-vx-text">
         {t("governance.impact.title")}
       </h3>
-      {isBondChange && change ? (
-        <BondImpact currentValue={change.currentValue} proposedValue={change.proposedValue} />
+      {change && handler ? (
+        <ImpactSummary change={change} handler={handler} />
       ) : (
         <p className="text-xs text-vx-muted">{t("governance.impact.unavailable")}</p>
       )}
@@ -29,7 +29,7 @@ export function ProposalImpactPreview({ proposal }: { proposal: GovernancePropos
   );
 }
 
-function BondImpact({ currentValue, proposedValue }: { currentValue: number; proposedValue: number }) {
+function ImpactSummary({ change, handler }: { change: ParameterChange; handler: ParameterImpactHandler }) {
   const { t } = useTranslation();
   const { solvers, isLoading, error } = useSolvers();
 
@@ -37,10 +37,10 @@ function BondImpact({ currentValue, proposedValue }: { currentValue: number; pro
   if (error) return <p className="text-xs text-vx-muted">{t("governance.impact.error")}</p>;
   if (solvers.length === 0) return <p className="text-xs text-vx-muted">{t("governance.impact.noSolvers")}</p>;
 
-  const impact = simulateBondThreshold(solvers, currentValue, proposedValue);
+  const impact = handler(change, solvers);
   const values = {
-    current: currentValue,
-    proposed: proposedValue,
+    current: change.currentValue,
+    proposed: impact.proposedValue,
     total: impact.total,
     lose: impact.wouldLose,
     gain: impact.wouldGain,
