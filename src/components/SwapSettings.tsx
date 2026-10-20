@@ -4,11 +4,13 @@ import { useCallback, useId, useRef, useState } from "react";
 import { useDismissableOverlay } from "@/hooks/useDismissableOverlay";
 import { useTranslation } from "@/lib/i18n/I18nProvider";
 import type { MessageKey } from "@/lib/i18n";
+import type { QuoteRisk } from "@/lib/quoteRisk";
 import {
   DEADLINE_PRESETS_MIN,
   SLIPPAGE_PRESETS,
   getSlippageStatus,
   parseSlippageInput,
+  suggestSlippageForRisk,
   type SlippageStatus,
 } from "@/lib/slippage";
 import { useSwapSettingsStore } from "@/store/swapSettings";
@@ -34,14 +36,25 @@ const chipClass = (active: boolean, tone: "default" | "warn" = "default") =>
  * Gear-button popover for slippage tolerance (presets + validated custom
  * value) and intent deadline. Values persist via `useSwapSettingsStore`;
  * only valid slippage values are ever committed to the store.
+ *
+ * When `quoteRisk` is warning/severe and the user hasn't picked slippage this
+ * session, a dismissible suggestion offers the next preset up. Dismissal is
+ * tracked by `quoteRisk` identity, so callers should memoize it per quote.
  */
-export function SwapSettings() {
+export function SwapSettings({ quoteRisk }: { quoteRisk?: QuoteRisk } = {}) {
   const { t } = useTranslation();
-  const { slippagePct, deadlineMin, setSlippagePct, setDeadlineMin, resetToDefaults } =
-    useSwapSettingsStore();
+  const {
+    slippagePct,
+    deadlineMin,
+    slippageOverridden,
+    setSlippagePct,
+    setDeadlineMin,
+    resetToDefaults,
+  } = useSwapSettingsStore();
   const [open, setOpen] = useState(false);
   const [customMode, setCustomMode] = useState(() => !isPreset(slippagePct));
   const [customText, setCustomText] = useState(() => (isPreset(slippagePct) ? "" : String(slippagePct)));
+  const [dismissedRisk, setDismissedRisk] = useState<QuoteRisk | null>(null);
 
   const triggerRef = useRef<HTMLButtonElement>(null);
   const customInputRef = useRef<HTMLInputElement>(null);
@@ -55,6 +68,16 @@ export function SwapSettings() {
   const statusKey = STATUS_MESSAGE_KEY[status];
   const messageId = `${baseId}-slippage-msg`;
   const triggerWarn = getSlippageStatus(slippagePct) !== "ok";
+  const suggestedPct =
+    quoteRisk && !slippageOverridden && dismissedRisk !== quoteRisk
+      ? suggestSlippageForRisk(quoteRisk.level, slippagePct)
+      : null;
+
+  const handleAcceptSuggestion = (pct: number) => {
+    setCustomMode(false);
+    setCustomText("");
+    setSlippagePct(pct);
+  };
 
   const handleCustomChange = (raw: string) => {
     setCustomMode(true);
@@ -85,6 +108,29 @@ export function SwapSettings() {
         <span aria-hidden="true">⚙ </span>
         {t("swap.settings.summary", { percent: slippagePct, minutes: deadlineMin })}
       </button>
+
+      {suggestedPct !== null && (
+        <div
+          role="status"
+          className="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-amber-400/60 bg-amber-400/10 px-3 py-2 text-xs text-amber-400"
+        >
+          <span className="flex-1">{t("swap.slippage.suggestion", { percent: suggestedPct })}</span>
+          <button
+            type="button"
+            onClick={() => handleAcceptSuggestion(suggestedPct)}
+            className="rounded-md border border-amber-400/60 px-2 py-1 font-medium hover:bg-amber-400/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-vx-sage/60"
+          >
+            {t("swap.slippage.suggestionApply", { percent: suggestedPct })}
+          </button>
+          <button
+            type="button"
+            onClick={() => setDismissedRisk(quoteRisk ?? null)}
+            className="rounded-md px-2 py-1 text-vx-muted hover:text-vx-text focus:outline-none focus-visible:ring-2 focus-visible:ring-vx-sage/60"
+          >
+            {t("swap.slippage.suggestionDismiss")}
+          </button>
+        </div>
+      )}
 
       {open && (
         <div
