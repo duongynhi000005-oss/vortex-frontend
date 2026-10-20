@@ -196,6 +196,24 @@ export function formatAmount(stroops: bigint): string {
   return `${negative ? "-" : ""}${whole}${fraction ? `.${fraction}` : ""}`;
 }
 
+/**
+ * Amount for a quick-fill button: `percent` of `balance`, rounded down to
+ * stroop precision so it never exceeds the balance. `reserve` is kept back
+ * from the balance only for 100% ("Max") to cover network fees.
+ * Returns null when the balance or reserve is malformed.
+ */
+export function quickFillAmount(balance: string, percent: number, reserve = "0"): string | null {
+  const balanceStroops = parseAmountToStroops(balance);
+  const reserveStroops = parseAmountToStroops(reserve);
+  if (balanceStroops === null || reserveStroops === null) return null;
+  if (!Number.isInteger(percent) || percent <= 0 || percent > 100) return null;
+  if (percent === 100) {
+    const spendable = balanceStroops > reserveStroops ? balanceStroops - reserveStroops : ZERO;
+    return formatAmount(spendable);
+  }
+  return formatAmount((balanceStroops * BigInt(percent)) / BigInt(100));
+}
+
 function getDecimalSeparator(locale: string): string {
   try {
     const parts = new Intl.NumberFormat(locale).formatToParts(1.1);
@@ -212,5 +230,4 @@ function getGroupSeparator(locale: string): string {
   } catch {
     return ",";
   }
-}
 }

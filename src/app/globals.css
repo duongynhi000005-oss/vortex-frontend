@@ -247,6 +247,40 @@
   }
 }
 
+/* Quick-fill percentage buttons next to the swap amount input */
+.quick-fill {
+  display: flex;
+  gap: 0.375rem;
+}
+
+.quick-fill-btn {
+  flex: 1;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--vx-border);
+  background: var(--vx-surface);
+  color: var(--vx-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.quick-fill-btn:hover:not(:disabled) {
+  color: var(--vx-sage);
+  border-color: var(--vx-sage-dim);
+}
+
+.quick-fill-btn:focus-visible {
+  outline: 1.5px solid var(--vx-focus-ring);
+  outline-offset: 2px;
+}
+
+.quick-fill-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 /* Swap button gradient */
 .btn-swap {
   background: linear-gradient(135deg, var(--vx-sage) 0%, #38BDF8 100%);
