@@ -4,6 +4,7 @@ import { useId, useMemo, useState } from "react";
 import { useTranslation } from "@/lib/i18n/I18nProvider";
 import { buildSuggestions, highlightSegments, MAX_QUERY_LENGTH } from "@/lib/searchQuery";
 import { useRecentSearchesStore } from "@/store/recentSearches";
+import { MAX_SAVED_SEARCH_LABEL_LENGTH, MAX_SAVED_SEARCHES, useSavedSearchesStore } from "@/store/savedSearches";
 
 /** Renders `text` with matched search terms wrapped in <mark>; never injects HTML. */
 export function HighlightedText({ text, terms }: { text: string; terms: readonly string[] }) {
@@ -29,21 +30,35 @@ type IntentSearchBoxProps = {
 
 /**
  * Free-text + `key:value` search input with WAI-ARIA combobox semantics (#441).
- * Suggestions complete the last word to a structured token or a recent search.
+ * Suggestions complete the last word to a structured token, a saved search (#578), or a recent search.
  */
 export function IntentSearchBox({ value, onChange }: IntentSearchBoxProps) {
   const { t } = useTranslation();
   const recent = useRecentSearchesStore((s) => s.recent);
   const addRecent = useRecentSearchesStore((s) => s.addRecent);
   const clearRecent = useRecentSearchesStore((s) => s.clearRecent);
+  const saved = useSavedSearchesStore((s) => s.searches);
+  const saveSearch = useSavedSearchesStore((s) => s.saveSearch);
+  const removeSearch = useSavedSearchesStore((s) => s.removeSearch);
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
+  /** Label being typed for a new saved search; `null` when the save form is closed. */
+  const [draftLabel, setDraftLabel] = useState<string | null>(null);
   const listboxId = useId();
   const helpId = useId();
 
-  const suggestions = useMemo(() => buildSuggestions(value, recent), [value, recent]);
+  const suggestions = useMemo(() => buildSuggestions(value, recent, 8, saved), [value, recent, saved]);
   const expanded = open && suggestions.length > 0;
   const optionId = (i: number) => `${listboxId}-opt-${i}`;
+
+  const trimmed = value.trim();
+  const canSave =
+    trimmed !== "" && saved.length < MAX_SAVED_SEARCHES && !saved.some((s) => s.query === trimmed);
+
+  const submitSave = () => {
+    // A blank or duplicate label keeps the form open; a saved query closes it.
+    if (saveSearch(draftLabel ?? "", value)) setDraftLabel(null);
+  };
 
   const choose = (next: string) => {
     onChange(next);
@@ -128,6 +143,77 @@ export function IntentSearchBox({ value, onChange }: IntentSearchBoxProps) {
           <p className="text-vx-text font-medium">{t("explore.search.helpTitle")}</p>
           <p>{t("explore.search.helpText")}</p>
           <p className="num">status:filled · chain:base · token:USDC · &quot;exact phrase&quot;</p>
+          {draftLabel === null ? (
+            <button
+              type="button"
+              onClick={() => setDraftLabel("")}
+              disabled={!canSave}
+              className="block text-vx-sage hover:underline disabled:opacity-40 disabled:no-underline focus:outline-none focus-visible:ring-2 focus-visible:ring-vx-sage rounded"
+            >
+              {t("explore.search.saveThis")}
+            </button>
+          ) : (
+            <form
+              className="flex items-center gap-1"
+              onSubmit={(e) => {
+                e.preventDefault();
+                submitSave();
+              }}
+            >
+              <label className="sr-only" htmlFor={`${listboxId}-label`}>
+                {t("explore.search.saveLabel")}
+              </label>
+              <input
+                id={`${listboxId}-label`}
+                autoFocus
+                value={draftLabel}
+                maxLength={MAX_SAVED_SEARCH_LABEL_LENGTH}
+                onChange={(e) => setDraftLabel(e.target.value)}
+                onKeyDown={(e) => e.key === "Escape" && setDraftLabel(null)}
+                placeholder={t("explore.search.saveLabel")}
+                className="min-w-0 flex-1 bg-vx-surface border border-vx-border rounded px-2 py-1 text-xs text-vx-text focus:outline-none focus-visible:ring-2 focus-visible:ring-vx-sage"
+              />
+              <button
+                type="submit"
+                className="px-1.5 py-0.5 rounded text-vx-sage hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-vx-sage"
+              >
+                {t("views.confirm")}
+              </button>
+              <button
+                type="button"
+                onClick={() => setDraftLabel(null)}
+                className="px-1.5 py-0.5 rounded text-vx-muted hover:text-vx-text focus:outline-none focus-visible:ring-2 focus-visible:ring-vx-sage"
+              >
+                {t("views.cancel")}
+              </button>
+            </form>
+          )}
+          {saved.length > 0 && (
+            <div className="space-y-1 pt-1 border-t border-vx-border">
+              <p className="text-vx-text font-medium">{t("explore.search.savedTitle")}</p>
+              <ul aria-label={t("explore.search.savedTitle")} className="space-y-0.5">
+                {saved.map((s) => (
+                  <li key={s.id} className="flex items-center justify-between gap-2">
+                    <button
+                      type="button"
+                      onClick={() => onChange(s.query)}
+                      className="min-w-0 truncate text-left text-vx-sage hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-vx-sage rounded"
+                    >
+                      <bdi>{s.label}</bdi> <span className="num text-vx-dim">{s.query}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => removeSearch(s.id)}
+                      aria-label={t("explore.search.removeSaved", { name: s.label })}
+                      className="px-1.5 py-0.5 rounded text-vx-muted hover:text-vx-text focus:outline-none focus-visible:ring-2 focus-visible:ring-vx-sage"
+                    >
+                      ×
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           {recent.length > 0 && (
             <button
               type="button"
@@ -161,11 +247,17 @@ export function IntentSearchBox({ value, onChange }: IntentSearchBoxProps) {
                 e.preventDefault();
                 choose(s.value);
               }}
-              className={`flex justify-between gap-2 px-2 py-1.5 rounded cursor-pointer ${
-                i === activeIndex ? "bg-vx-sage/15 text-vx-text" : "text-vx-muted"
-              }`}
+              className={`flex justify-between gap-2 px-2 py-1.5 rounded cursor-pointer border-l-2 ${
+                s.kind === "saved" ? "border-vx-sage" : "border-transparent"
+              } ${i === activeIndex ? "bg-vx-sage/15 text-vx-text" : s.kind === "saved" ? "text-vx-text" : "text-vx-muted"}`}
             >
-              <span className="truncate">{s.value}</span>
+              {s.kind === "saved" ? (
+                <span className="truncate">
+                  <bdi className="font-medium">{s.label}</bdi> <span className="num text-vx-dim">{s.value}</span>
+                </span>
+              ) : (
+                <span className="truncate">{s.value}</span>
+              )}
               <span className="text-[10px] uppercase text-vx-dim">{t(`explore.search.kind.${s.kind}`)}</span>
             </li>
           ))}

@@ -155,13 +155,24 @@ export function highlightSegments(text: string, terms: readonly string[]): Highl
   return segments;
 }
 
-export type Suggestion = { value: string; kind: "status" | "chain" | "token" | "recent" };
+export type Suggestion = {
+  value: string;
+  kind: "status" | "chain" | "token" | "saved" | "recent";
+  /** User-given name, set only for `saved` suggestions. */
+  label?: string;
+};
+export type SavedSuggestionSource = { label: string; query: string };
 
 /**
- * Suggests completions for the last (partial) word of `input`, plus matching
- * recent searches. Returns full replacement query strings.
+ * Suggests completions for the last (partial) word of `input`, then matching
+ * saved searches (#578), then matching recent searches. Returns full replacement query strings.
  */
-export function buildSuggestions(input: string, recent: readonly string[], limit = 8): Suggestion[] {
+export function buildSuggestions(
+  input: string,
+  recent: readonly string[],
+  limit = 8,
+  saved: readonly SavedSuggestionSource[] = [],
+): Suggestion[] {
   const query = readQuery(input);
   const lastSpace = query.lastIndexOf(" ");
   const prefix = query.slice(0, lastSpace + 1);
@@ -184,6 +195,11 @@ export function buildSuggestions(input: string, recent: readonly string[], limit
     }
   }
   const needle = query.trim().toLowerCase();
+  for (const entry of saved) {
+    if (!needle || entry.label.toLowerCase().includes(needle) || entry.query.toLowerCase().includes(needle)) {
+      candidates.push({ value: entry.query, kind: "saved", label: entry.label });
+    }
+  }
   for (const entry of recent) {
     if (!needle || entry.toLowerCase().includes(needle)) candidates.push({ value: entry, kind: "recent" });
   }
