@@ -11,6 +11,7 @@ import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
 import { useIntent } from "@/hooks/useIntent";
 import { parseIntentId } from "@/lib/inputs";
 import { useTranslation } from "@/lib/i18n/I18nProvider";
+import { swapAgainHref } from "@/lib/swapLink";
 import { timeAgo } from "@/lib/time";
 import { truncateAddress } from "@/lib/stellarAddress";
 
@@ -72,14 +73,25 @@ export default function IntentDetailPage({
             ← Back to explorer
           </Link>
           {intent && (
-            <button
-              type="button"
-              onClick={() => window.print()}
-              className="print:hidden text-xs px-3 py-1.5 rounded-lg border border-vx-border text-vx-muted
-                         hover:text-vx-text hover:border-vx-sage/40 transition-colors"
-            >
-              Print / Save as PDF
-            </button>
+            <div className="flex items-center gap-2">
+              {isSettled && (
+                <Link
+                  href={swapAgainHref(intent)}
+                  className="print:hidden text-xs px-3 py-1.5 rounded-lg border border-vx-border text-vx-muted
+                             hover:text-vx-text hover:border-vx-sage/40 transition-colors"
+                >
+                  Swap again
+                </Link>
+              )}
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="print:hidden text-xs px-3 py-1.5 rounded-lg border border-vx-border text-vx-muted
+                           hover:text-vx-text hover:border-vx-sage/40 transition-colors"
+              >
+                Print / Save as PDF
+              </button>
+            </div>
           )}
         </div>
 
