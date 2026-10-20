@@ -13,7 +13,7 @@ import { useToastStore } from "@/store/toast";
 import { useTranslation } from "@/lib/i18n/I18nProvider";
 import { ApiError } from "@/lib/api";
 import { timeRemaining } from "@/lib/time";
-import { computeSolverStats, estimateEarnings, SOLVER_FEE_BPS } from "@/lib/solverStats";
+import { computeSolverStats, estimateEarnings, formatDecimal, parseDecimal, SOLVER_FEE_BPS } from "@/lib/solverStats";
 import {
   MIN_BOND_USD,
   activeIntents,
@@ -22,10 +22,16 @@ import {
   fillCounts,
   inactiveReasons,
 } from "@/lib/solverDashboard";
+import { BarChart } from "@/components/charts/BarChart";
 
 const HIDE_BALANCES_KEY = "vortex:solver-dashboard:hide-balances";
 const NOTIFY_EXPIRY_KEY = "vortex:solver-dashboard:notify-expiry";
 const FOCUS_RING = "focus:outline-none focus-visible:ring-2 focus-visible:ring-vx-sage";
+
+/** Renders a chart value with the same 7-dp digits the earnings list shows. */
+function formatEarning(value: number): string {
+  return formatDecimal(parseDecimal(value.toFixed(7))!);
+}
 
 /** Boolean preference persisted in localStorage (falls back to in-memory). */
 function usePersistedFlag(key: string): [boolean, (v: boolean) => void] {
@@ -175,13 +181,26 @@ export default function SolverDashboardPage() {
             {earnings.length === 0 ? (
               <p className="text-xs text-vx-muted">{t("solverDashboard.earnings.empty")}</p>
             ) : (
-              <ul className={`space-y-1 ${blur}`}>
-                {earnings.map((e) => (
-                  <li key={e.token} className="num text-sm text-vx-text">
-                    {e.amount} {e.token}
-                  </li>
-                ))}
-              </ul>
+              <>
+                <div className={blur}>
+                  <BarChart
+                    title={t("solverDashboard.earnings.chartTitle")}
+                    valueLabel={t("solverDashboard.earnings.valueLabel")}
+                    data={earnings.map((e) => ({ label: e.token, value: Number(e.amount) }))}
+                    formatValue={formatEarning}
+                    showTableLabel={t("chart.showTable")}
+                    hideTableLabel={t("chart.hideTable")}
+                    emptyLabel={t("chart.empty")}
+                  />
+                </div>
+                <ul className={`space-y-1 mt-3 ${blur}`}>
+                  {earnings.map((e) => (
+                    <li key={e.token} className="num text-sm text-vx-text">
+                      {e.amount} {e.token}
+                    </li>
+                  ))}
+                </ul>
+              </>
             )}
             <p className="text-[10px] text-vx-muted mt-2">{t("solverDashboard.earnings.formula", { bps: SOLVER_FEE_BPS })}</p>
           </Panel>
