@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
+import { useRef, type ChangeEvent, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { SortSpec } from "@/lib/solverRanking";
 
@@ -26,6 +26,13 @@ export type DataTableProps<T, K extends string> = {
   /** Rows above this count are virtualised. */
   virtualizeAbove?: number;
   sortHint?: string;
+  /** Adds a checkbox column. Selection is owned by the parent via `selectedKeys`. */
+  selectable?: boolean;
+  selectedKeys?: readonly string[];
+  onSelectionChange?: (keys: string[]) => void;
+  /** Once this many rows are checked, the remaining checkboxes are disabled. */
+  selectionLimit?: number;
+  selectionLabels?: { column: string; row: (row: T) => string };
 };
 
 const ARIA_SORT = { asc: "ascending", desc: "descending" } as const;
@@ -34,6 +41,7 @@ const ARIA_SORT = { asc: "ascending", desc: "descending" } as const;
  * Accessible data table primitive.
  * - Real `<table>` semantics with `aria-sort` on sorted headers and a sticky header.
  * - Multi-key sort: shift-click or Shift+Enter/Space on a header button.
+ * - Optional row selection: a checkbox column driven by `selectedKeys` / `onSelectionChange`.
  * - Below 640 px each row collapses into a labelled card (pure CSS, one DOM).
  * - Large data sets (> `virtualizeAbove` rows) are windowed with @tanstack/react-virtual.
  */
@@ -46,9 +54,16 @@ export function DataTable<T, K extends string>({
   onSort,
   virtualizeAbove = 200,
   sortHint,
+  selectable = false,
+  selectedKeys = [],
+  onSelectionChange,
+  selectionLimit,
+  selectionLabels,
 }: DataTableProps<T, K>) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const virtualize = rows.length > virtualizeAbove;
+  const colCount = columns.length + (selectable ? 1 : 0);
+  const atSelectionLimit = selectionLimit !== undefined && selectedKeys.length >= selectionLimit;
   const virtualizer = useVirtualizer({
     count: virtualize ? rows.length : 0,
     getScrollElement: () => scrollRef.current,
@@ -72,6 +87,8 @@ export function DataTable<T, K extends string>({
       onSort?.(key, true);
     }
   };
+  const handleSelect = (key: string) => (e: ChangeEvent<HTMLInputElement>) =>
+    onSelectionChange?.(e.target.checked ? [...selectedKeys, key] : selectedKeys.filter((k) => k !== key));
 
   const cellBase = "px-3 sm:px-4 py-3 text-sm max-sm:flex max-sm:justify-between max-sm:gap-4 max-sm:py-1.5 max-sm:before:content-[attr(data-label)] max-sm:before:uppercase max-sm:before:tracking-wide max-sm:before:text-[10px] max-sm:before:text-vx-muted";
 
@@ -90,6 +107,11 @@ export function DataTable<T, K extends string>({
         </caption>
         <thead className="sticky top-0 z-10 bg-vx-card max-sm:sr-only">
           <tr className="border-b border-vx-border">
+            {selectable && (
+              <th scope="col" className="w-10 px-3 sm:px-4 py-2.5">
+                <span className="sr-only">{selectionLabels?.column}</span>
+              </th>
+            )}
             {columns.map((col) => {
               const idx = sorts.findIndex((s) => s.key === col.id);
               const spec = idx >= 0 ? sorts[idx] : null;
@@ -126,31 +148,50 @@ export function DataTable<T, K extends string>({
         <tbody className="max-sm:block max-sm:space-y-3 max-sm:p-3">
           {padTop > 0 && (
             <tr aria-hidden="true">
-              <td colSpan={columns.length} style={{ height: padTop, padding: 0 }} />
+              <td colSpan={colCount} style={{ height: padTop, padding: 0 }} />
             </tr>
           )}
-          {visible.map((row) => (
-            <tr
-              key={getRowKey(row)}
-              className="border-b border-vx-line hover:bg-vx-surface/30 transition-colors max-sm:block max-sm:rounded-lg max-sm:border max-sm:border-vx-border max-sm:p-3"
-            >
-              {columns.map((col) => {
-                const align = col.align === "right" ? "sm:text-right" : "text-left";
-                return col.isRowHeader ? (
-                  <th key={col.id} scope="row" data-label={col.header} className={`${cellBase} ${align} font-normal`}>
-                    {col.cell(row)}
-                  </th>
-                ) : (
-                  <td key={col.id} data-label={col.header} className={`${cellBase} ${align}`}>
-                    {col.cell(row)}
+          {visible.map((row) => {
+            const rowKey = getRowKey(row);
+            const isSelected = selectedKeys.includes(rowKey);
+            return (
+              <tr
+                key={rowKey}
+                aria-selected={selectable ? isSelected : undefined}
+                className={`border-b border-vx-line hover:bg-vx-surface/30 transition-colors max-sm:block max-sm:rounded-lg max-sm:border max-sm:border-vx-border max-sm:p-3 ${
+                  isSelected ? "bg-vx-surface/50" : ""
+                }`}
+              >
+                {selectable && (
+                  <td data-label={selectionLabels?.column} className={`${cellBase} w-10`}>
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      disabled={!isSelected && atSelectionLimit}
+                      onChange={handleSelect(rowKey)}
+                      aria-label={selectionLabels?.row(row)}
+                      className="h-4 w-4 accent-vx-sage rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-vx-sage disabled:opacity-40"
+                    />
                   </td>
-                );
-              })}
-            </tr>
-          ))}
+                )}
+                {columns.map((col) => {
+                  const align = col.align === "right" ? "sm:text-right" : "text-left";
+                  return col.isRowHeader ? (
+                    <th key={col.id} scope="row" data-label={col.header} className={`${cellBase} ${align} font-normal`}>
+                      {col.cell(row)}
+                    </th>
+                  ) : (
+                    <td key={col.id} data-label={col.header} className={`${cellBase} ${align}`}>
+                      {col.cell(row)}
+                    </td>
+                  );
+                })}
+              </tr>
+            );
+          })}
           {padBottom > 0 && (
             <tr aria-hidden="true">
-              <td colSpan={columns.length} style={{ height: padBottom, padding: 0 }} />
+              <td colSpan={colCount} style={{ height: padBottom, padding: 0 }} />
             </tr>
           )}
         </tbody>
