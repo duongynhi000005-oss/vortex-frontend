@@ -11,7 +11,7 @@ import {
   parseSlippageInput,
   type SlippageStatus,
 } from "@/lib/slippage";
-import { useSwapSettingsStore } from "@/store/swapSettings";
+import { useSwapSettings } from "@/store/swapSettings";
 
 const STATUS_MESSAGE_KEY: Partial<Record<SlippageStatus, MessageKey>> = {
   low: "swap.slippage.lowWarning",
@@ -32,13 +32,15 @@ const chipClass = (active: boolean, tone: "default" | "warn" = "default") =>
 
 /**
  * Gear-button popover for slippage tolerance (presets + validated custom
- * value) and intent deadline. Values persist via `useSwapSettingsStore`;
- * only valid slippage values are ever committed to the store.
+ * value) and intent deadline for `srcChain`. Values persist per chain via
+ * `useSwapSettings`; only valid slippage values are ever committed to the store.
+ * Remount with `key={srcChain}` when the source chain changes so the custom
+ * input re-syncs to that chain's value.
  */
-export function SwapSettings() {
+export function SwapSettings({ srcChain }: { srcChain: string }) {
   const { t } = useTranslation();
   const { slippagePct, deadlineMin, setSlippagePct, setDeadlineMin, resetToDefaults } =
-    useSwapSettingsStore();
+    useSwapSettings(srcChain);
   const [open, setOpen] = useState(false);
   const [customMode, setCustomMode] = useState(() => !isPreset(slippagePct));
   const [customText, setCustomText] = useState(() => (isPreset(slippagePct) ? "" : String(slippagePct)));
