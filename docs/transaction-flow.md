@@ -48,3 +48,20 @@ stateDiagram-v2
   signature is never replayed without fresh consent.
 - **Strict mode** — runs are only created by user actions, so the mount/unmount
   probe of React strict mode cannot abort or duplicate one.
+
+## Price impact
+
+Price impact is how much your trade moves the price against you. A pool's price
+shifts as you trade, so larger trades relative to the available liquidity get a
+worse rate than the current market price. The quote shows this as a percentage,
+and the `RiskBanner` in the swap flow summarises it.
+
+Thresholds, defined in [`src/lib/quoteRisk.ts`](../src/lib/quoteRisk.ts) as
+`QUOTE_RISK_THRESHOLDS`:
+
+- **1% or more** — *caution*. Shown for information only.
+- **3% or more** — *high price impact*. Check the amounts before you sign.
+- **10% or more** — *severe*. You must type `CONFIRM` before you can continue.
+
+To reduce price impact, trade a smaller amount or split the trade into several
+smaller ones.
