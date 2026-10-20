@@ -1,4 +1,5 @@
 import { sanitizeText } from "./textSafety";
+import type { ChartSeries } from "../components/charts";
 
 export type GovernanceProposalStatus =
   | "active"
@@ -208,6 +209,54 @@ export function getGovernanceProposals(): GovernanceProposal[] {
 
 export function getGovernanceProposalById(id: string): GovernanceProposal | undefined {
   return INITIAL_PROPOSALS.find((p) => p.id.toLowerCase() === id.toLowerCase());
+}
+
+/** Terminal outcomes shown on the archive timeline, in stacking order. */
+export const ARCHIVE_OUTCOMES = ["passed", "rejected", "executed", "expired"] as const;
+export type ArchiveOutcome = (typeof ARCHIVE_OUTCOMES)[number];
+
+function isArchiveOutcome(status: GovernanceProposalStatus): status is ArchiveOutcome {
+  return (ARCHIVE_OUTCOMES as readonly string[]).includes(status);
+}
+
+const monthKey = (date: Date): string => date.toISOString().slice(0, 7);
+
+/**
+ * Buckets archived proposals by the UTC month their outcome was decided, with one
+ * series per outcome. Executed and expired proposals are dated by `executedAt` and
+ * `expiredAt`; passed and rejected proposals are dated by the voting `deadline`,
+ * since that is when the result was fixed. Active and queued proposals have no
+ * outcome yet and are skipped. Months with no outcomes are kept as zero so the
+ * timeline stays continuous. Returns `[]` when no proposal has a dated outcome.
+ */
+export function bucketProposalsByMonth(proposals: GovernanceProposal[]): ChartSeries[] {
+  const byMonth: Record<string, Record<ArchiveOutcome, number>> = {};
+  for (const p of proposals) {
+    if (!isArchiveOutcome(p.status)) continue;
+    const dated =
+      p.status === "executed" ? p.executedAt ?? p.deadline : p.status === "expired" ? p.expiredAt ?? p.deadline : p.deadline;
+    const ts = Date.parse(dated);
+    if (Number.isNaN(ts)) continue;
+    const month = monthKey(new Date(ts));
+    byMonth[month] ??= { passed: 0, rejected: 0, executed: 0, expired: 0 };
+    byMonth[month][p.status] += 1;
+  }
+
+  const months = Object.keys(byMonth).sort();
+  if (months.length === 0) return [];
+
+  const labels: string[] = [];
+  const cursor = new Date(`${months[0]}-01T00:00:00Z`);
+  const last = months[months.length - 1];
+  while (monthKey(cursor) <= last) {
+    labels.push(monthKey(cursor));
+    cursor.setUTCMonth(cursor.getUTCMonth() + 1);
+  }
+
+  return ARCHIVE_OUTCOMES.map((outcome) => ({
+    name: outcome,
+    data: labels.map((label) => ({ label, value: byMonth[label]?.[outcome] ?? 0 })),
+  }));
 }
 
 /**
