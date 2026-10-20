@@ -1,114 +1,61 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useVotingPower } from '@/hooks/useVotingPower';
+import { useState } from 'react';
 import { useDelegation } from '@/hooks/useDelegation';
 import { sanitizeText } from '@/lib/textSafety';
 import { isSameStellarAddress, isValidStellarAddress } from '@/lib/stellarAddress';
-import { secureLogger } from '@/lib/secureLogging';
-
-interface DelegateProfile {
-  address: string;
-  name: string;
-  bio: string;
-  votingPower: number;
-  participationRate: number;
-  proposalsVoted: number;
-}
 
 type SortKey = 'votingPower' | 'participationRate' | 'proposalsVoted';
-type FlowStage = 'idle' | 'review' | 'simulate' | 'sign' | 'pending' | 'done';
-
-const MOCK_DELEGATES: DelegateProfile[] = [
-  {
-    address: 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF',
-    name: 'Aurora Governance',
-    bio: 'Active voter focused on protocol upgrades and treasury stewardship.',
-    votingPower: 1250000,
-    participationRate: 0.94,
-    proposalsVoted: 87,
-  },
-  {
-    address: 'GBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBWHF',
-    name: 'Nova Collective',
-    bio: 'Community-run delegate prioritising developer tooling and grants.',
-    votingPower: 860000,
-    participationRate: 0.81,
-    proposalsVoted: 64,
-  },
-  {
-    address: 'GCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCWHF',
-    name: 'Meridian Labs',
-    bio: 'Security-first delegate reviewing every proposal before voting.',
-    votingPower: 540000,
-    participationRate: 0.72,
-    proposalsVoted: 51,
-  },
-];
-
-function formatPower(value: number): string {
-  return new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(value);
-}
 
 function formatPercent(value: number): string {
   return `${Math.round(value * 100)}%`;
 }
 
 export default function DelegatesPage() {
-  const { votingPower, refresh: refreshVotingPower } = useVotingPower();
   const {
-    currentDelegate,
-    delegatedPower,
-    history,
-    delegate,
-    revoke,
-    isPending,
+    state: { currentDelegate, delegatedPower, history },
+    flow,
+    directory,
+    effectiveVotingPower,
+    startDelegate,
+    startRevoke,
+    confirm,
+    cancel,
+    searchDirectory,
+    sortDirectory,
   } = useDelegation();
 
   const [search, setSearch] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('votingPower');
-  const [selected, setSelected] = useState<DelegateProfile | null>(null);
   const [manualAddress, setManualAddress] = useState('');
   const [confirmedAddress, setConfirmedAddress] = useState('');
-  const [stage, setStage] = useState<FlowStage>('idle');
   const [error, setError] = useState<string | null>(null);
 
-  const filtered = useMemo(() => {
-    const term = search.trim().toLowerCase();
-    const list = term
-      ? MOCK_DELEGATES.filter(
-          (d) =>
-            d.name.toLowerCase().includes(term) ||
-            d.address.toLowerCase().includes(term),
-        )
-      : MOCK_DELEGATES;
-    return [...list].sort((a, b) => b[sortKey] - a[sortKey]);
-  }, [search, sortKey]);
+  const targetAddress = manualAddress.trim();
+  const isNewAddress = !directory.some((d) => isSameStellarAddress(d.address, targetAddress));
+  const isRevoke = flow.target !== null && flow.target === currentDelegate;
+  const progressLabel =
+    flow.status === 'simulating'
+      ? 'Simulating…'
+      : flow.status === 'signing'
+        ? 'Waiting for signature…'
+        : flow.status === 'pending'
+          ? 'Waiting for confirmation…'
+          : null;
 
-  const targetAddress = selected?.address ?? manualAddress.trim();
-  const isNewAddress = !MOCK_DELEGATES.some((d) => isSameStellarAddress(d.address, targetAddress));
-  const isSelfDelegation = isSameStellarAddress(targetAddress, currentDelegate ?? '');
-  const addressValid = isValidStellarAddress(targetAddress);
-
-  const resetFlow = useCallback(() => {
-    setStage('idle');
+  const resetFlow = () => {
     setError(null);
     setConfirmedAddress('');
-  }, []);
-
-  useEffect(() => {
-    if (stage === 'done') {
-      void refreshVotingPower();
-    }
-  }, [stage, refreshVotingPower]);
+    cancel();
+  };
 
   const handleReview = () => {
     setError(null);
-    if (!addressValid) {
+    if (!isValidStellarAddress(targetAddress)) {
       setError('Enter a valid Stellar address.');
       return;
     }
-    if (isSelfDelegation) {
+    if (isSameStellarAddress(targetAddress, currentDelegate ?? '')) {
       setError('You cannot delegate to your current delegate.');
       return;
     }
@@ -116,33 +63,16 @@ export default function DelegatesPage() {
       setError('Confirm the full address before continuing.');
       return;
     }
-    setStage('review');
+    startDelegate(targetAddress);
   };
 
-  const handleSimulate = () => setStage('simulate');
-
-  const handleSign = async () => {
-    setStage('sign');
-    try {
-      await delegate(targetAddress);
-      setStage('done');
-    } catch (err) {
-      secureLogger.error('delegation failed', err);
-      setError('Delegation failed. Please try again.');
-      setStage('idle');
-    }
-  };
-
-  const handleRevoke = async () => {
-    setError(null);
-    try {
-      await revoke();
-      setStage('done');
-    } catch (err) {
-      secureLogger.error('revoke failed', err);
-      setError('Revoke failed. Please try again.');
-    }
-  };
+  const message =
+    error ??
+    (flow.status === 'review' && flow.isSelfDelegation
+      ? 'You cannot delegate to your own account.'
+      : flow.status === 'error'
+        ? 'Delegation failed. Please try again.'
+        : null);
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-8">
@@ -163,22 +93,22 @@ export default function DelegatesPage() {
           </div>
           <div>
             <dt className="text-xs uppercase text-muted-foreground">Power delegated</dt>
-            <dd className="text-sm">{formatPower(delegatedPower)}</dd>
+            <dd className="text-sm">{delegatedPower}</dd>
           </div>
           <div>
             <dt className="text-xs uppercase text-muted-foreground">Effective voting power</dt>
-            <dd className="text-sm">{formatPower(votingPower)}</dd>
+            <dd className="text-sm">{effectiveVotingPower}</dd>
           </div>
         </dl>
 
         {currentDelegate && (
           <button
             type="button"
-            onClick={handleRevoke}
-            disabled={isPending}
+            onClick={() => startRevoke()}
+            disabled={progressLabel !== null}
             className="mt-4 rounded-md border px-3 py-2 text-sm focus-visible:outline focus-visible:outline-2"
           >
-            {isPending ? 'Revoking…' : 'Revoke delegation'}
+            {progressLabel !== null ? 'Revoking…' : 'Revoke delegation'}
           </button>
         )}
 
@@ -188,8 +118,12 @@ export default function DelegatesPage() {
             <ul className="mt-2 space-y-1 text-sm">
               {history.map((entry) => (
                 <li key={entry.id} className="flex justify-between gap-4">
-                  <span className="font-mono break-all">{entry.delegate ?? 'Revoked'}</span>
-                  <span className="text-muted-foreground">{entry.timestamp}</span>
+                  <span className="font-mono break-all">
+                    {entry.action === 'revoke' ? 'Revoked' : entry.delegate}
+                  </span>
+                  <span className="text-muted-foreground">
+                    {new Date(entry.timestamp).toLocaleString()}
+                  </span>
                 </li>
               ))}
             </ul>
@@ -207,7 +141,10 @@ export default function DelegatesPage() {
             <input
               type="search"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                searchDirectory(e.target.value);
+              }}
               placeholder="Search by name or address"
               className="w-full rounded-md border px-3 py-2 text-sm"
             />
@@ -216,7 +153,10 @@ export default function DelegatesPage() {
             <span className="sr-only">Sort delegates</span>
             <select
               value={sortKey}
-              onChange={(e) => setSortKey(e.target.value as SortKey)}
+              onChange={(e) => {
+                setSortKey(e.target.value as SortKey);
+                sortDirectory(e.target.value as SortKey);
+              }}
               className="rounded-md border px-3 py-2 text-sm"
             >
               <option value="votingPower">Voting power</option>
@@ -227,7 +167,7 @@ export default function DelegatesPage() {
         </div>
 
         <ul className="mt-4 space-y-3">
-          {filtered.map((d) => (
+          {directory.map((d) => (
             <li key={d.address} className="rounded-lg border p-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
@@ -237,8 +177,7 @@ export default function DelegatesPage() {
                 <button
                   type="button"
                   onClick={() => {
-                    setSelected(d);
-                    setManualAddress('');
+                    setManualAddress(d.address);
                     resetFlow();
                   }}
                   className="rounded-md border px-3 py-1.5 text-sm focus-visible:outline focus-visible:outline-2"
@@ -250,7 +189,7 @@ export default function DelegatesPage() {
               <dl className="mt-2 flex flex-wrap gap-4 text-xs text-muted-foreground">
                 <div>
                   <dt className="inline">Power: </dt>
-                  <dd className="inline">{formatPower(d.votingPower)}</dd>
+                  <dd className="inline">{d.votingPower}</dd>
                 </div>
                 <div>
                   <dt className="inline">Participation: </dt>
@@ -274,9 +213,8 @@ export default function DelegatesPage() {
           <span className="text-sm">Address</span>
           <input
             type="text"
-            value={selected ? selected.address : manualAddress}
+            value={manualAddress}
             onChange={(e) => {
-              setSelected(null);
               setManualAddress(e.target.value);
               resetFlow();
             }}
@@ -298,13 +236,13 @@ export default function DelegatesPage() {
           </label>
         )}
 
-        {error && (
+        {message && (
           <p role="alert" className="mt-3 text-sm text-red-600">
-            {error}
+            {message}
           </p>
         )}
 
-        {stage === 'idle' && (
+        {(flow.status === 'idle' || flow.status === 'error') && (
           <button
             type="button"
             onClick={handleReview}
@@ -314,43 +252,47 @@ export default function DelegatesPage() {
           </button>
         )}
 
-        {stage === 'review' && (
+        {flow.status === 'review' && (
           <div className="mt-4 rounded-md border p-3 text-sm">
             <p>
-              You are delegating your voting power to{' '}
-              <span className="font-mono break-all">{targetAddress}</span>. Delegation is revocable
-              and applies to future proposals only.
+              {isRevoke ? (
+                'You are revoking your delegation. Revocation applies to future proposals only.'
+              ) : (
+                <>
+                  You are delegating your voting power to{' '}
+                  <span className="font-mono break-all">{flow.target}</span>. Delegation is
+                  revocable and applies to future proposals only.
+                </>
+              )}
             </p>
-            <button
-              type="button"
-              onClick={handleSimulate}
-              className="mt-3 rounded-md border px-3 py-2 focus-visible:outline focus-visible:outline-2"
-            >
-              Simulate
-            </button>
+            {!flow.isSelfDelegation && (
+              <div className="mt-3 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => void confirm()}
+                  className="rounded-md border px-3 py-2 focus-visible:outline focus-visible:outline-2"
+                >
+                  {isRevoke ? 'Confirm revoke' : 'Confirm delegation'}
+                </button>
+                <button
+                  type="button"
+                  onClick={resetFlow}
+                  className="rounded-md border px-3 py-2 focus-visible:outline focus-visible:outline-2"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
           </div>
         )}
 
-        {stage === 'simulate' && (
-          <div className="mt-4 rounded-md border p-3 text-sm">
-            <p>Simulation succeeded. No state changes were made.</p>
-            <button
-              type="button"
-              onClick={handleSign}
-              className="mt-3 rounded-md border px-3 py-2 focus-visible:outline focus-visible:outline-2"
-            >
-              Sign &amp; delegate
-            </button>
-          </div>
-        )}
-
-        {(stage === 'sign' || stage === 'pending') && (
+        {progressLabel !== null && (
           <p className="mt-4 text-sm" role="status">
-            Waiting for signature…
+            {progressLabel}
           </p>
         )}
 
-        {stage === 'done' && (
+        {flow.status === 'confirmed' && (
           <p className="mt-4 text-sm" role="status">
             Delegation updated. Effective voting power refreshed.
           </p>

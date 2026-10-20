@@ -73,6 +73,9 @@ export function isValidStellarPublicKey(address: string): boolean {
   );
 }
 
+/** Alias used by the governance pages; the account-key check is the validation they need. */
+export const isValidStellarAddress = isValidStellarPublicKey;
+
 /**
  * Normalises a Stellar address for comparison: trims surrounding whitespace and
  * upper-cases it. Stellar strkeys are case-insensitive base32, so two addresses
@@ -181,6 +184,4 @@ export function isValidStrKey(value: string): boolean {
     decoded[decoded.length - 2] === (expectedChecksum & 0xff) &&
     decoded[decoded.length - 1] === expectedChecksum >>> 8
   );
-}
-
 }
