@@ -1,8 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useVotingPower } from '@/hooks/useVotingPower';
 import { useDelegation } from '@/hooks/useDelegation';
+import { useQueryState } from '@/hooks/useQueryState';
 import { sanitizeText } from '@/lib/textSafety';
 import { isSameStellarAddress, isValidStellarAddress } from '@/lib/stellarAddress';
 import { secureLogger } from '@/lib/secureLogging';
@@ -17,6 +18,8 @@ interface DelegateProfile {
 }
 
 type SortKey = 'votingPower' | 'participationRate' | 'proposalsVoted';
+const SORT_KEYS: SortKey[] = ['votingPower', 'participationRate', 'proposalsVoted'];
+const DEFAULT_SORT_KEY: SortKey = 'votingPower';
 type FlowStage = 'idle' | 'review' | 'simulate' | 'sign' | 'pending' | 'done';
 
 const MOCK_DELEGATES: DelegateProfile[] = [
@@ -54,7 +57,11 @@ function formatPercent(value: number): string {
   return `${Math.round(value * 100)}%`;
 }
 
-export default function DelegatesPage() {
+function parseSortKey(value: string | null): SortKey {
+  return SORT_KEYS.find((key) => key === value) ?? DEFAULT_SORT_KEY;
+}
+
+function DelegatesPageContent() {
   const { votingPower, refresh: refreshVotingPower } = useVotingPower();
   const {
     currentDelegate,
@@ -64,9 +71,11 @@ export default function DelegatesPage() {
     revoke,
     isPending,
   } = useDelegation();
+  const { params, update } = useQueryState();
 
-  const [search, setSearch] = useState('');
-  const [sortKey, setSortKey] = useState<SortKey>('votingPower');
+  // Search keeps a local draft so the input stays responsive; it is mirrored to `?q=`.
+  const [search, setSearch] = useState(() => params.get('q') ?? '');
+  const sortKey = parseSortKey(params.get('sort'));
   const [selected, setSelected] = useState<DelegateProfile | null>(null);
   const [manualAddress, setManualAddress] = useState('');
   const [confirmedAddress, setConfirmedAddress] = useState('');
@@ -207,7 +216,10 @@ export default function DelegatesPage() {
             <input
               type="search"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                update({ q: e.target.value || null });
+              }}
               placeholder="Search by name or address"
               className="w-full rounded-md border px-3 py-2 text-sm"
             />
@@ -216,7 +228,10 @@ export default function DelegatesPage() {
             <span className="sr-only">Sort delegates</span>
             <select
               value={sortKey}
-              onChange={(e) => setSortKey(e.target.value as SortKey)}
+              onChange={(e) => {
+                const next = parseSortKey(e.target.value);
+                update({ sort: next === DEFAULT_SORT_KEY ? null : next });
+              }}
               className="rounded-md border px-3 py-2 text-sm"
             >
               <option value="votingPower">Voting power</option>
@@ -357,5 +372,14 @@ export default function DelegatesPage() {
         )}
       </section>
     </main>
+  );
+}
+
+export default function DelegatesPage() {
+  // useSearchParams (inside useQueryState) requires a Suspense boundary for static rendering.
+  return (
+    <Suspense fallback={null}>
+      <DelegatesPageContent />
+    </Suspense>
   );
 }
