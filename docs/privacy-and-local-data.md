@@ -20,6 +20,7 @@ All browser storage goes through `src/lib/storage.ts`. ESLint `no-restricted-glo
 | `vortex:recentChains` | Recently picked chains | personal | 30 days | `useRecentChains` |
 | `vortex:solver-registration-draft` | Solver registration draft | personal | 1 day | `useLocalStorageDraft` |
 | `vortex:knownAddresses` | Address-poisoning reference set | personal | 90 days | `src/lib/knownAddresses.ts` |
+| `vortex:intent-notes:<address>` | Private notes and colour tags on your own intents, one key per wallet. Local only, never synced | personal | until cleared | `src/lib/intentNotes.ts` |
 | `vortex:columns:*` | Table column visibility | preference | until cleared | `useColumnVisibility` |
 | `vortex-motion-preference` | Reduced-motion preference | preference | until cleared | `SettingsPanel` |
 | `vortex-onboarding-seen`, `vortex_solver_onboarding_dismissed` | Onboarding dismissed | preference | until cleared | `OnboardingHints`, `SolvePageClient` |
