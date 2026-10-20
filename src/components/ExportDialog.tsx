@@ -4,6 +4,7 @@ import { useId, useMemo, useRef, useState } from "react";
 import { useTranslation } from "@/lib/i18n/I18nProvider";
 import { useDismissableOverlay } from "@/hooks/useDismissableOverlay";
 import { secureLogger } from "@/lib/secureLogging";
+import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
 import { downloadBlob, startExport, type ExportJob } from "@/lib/export/client";
 import {
   EXPORT_COLUMNS,
@@ -12,6 +13,7 @@ import {
   type ExportColumn,
   type ExportFormat,
 } from "@/lib/export/serialize";
+import { buildIntentsCsv } from "@/lib/csv";
 import type { FeedItem } from "@/lib/types";
 
 const NETWORK = process.env["NEXT_PUBLIC_NETWORK"] ?? "testnet";
@@ -40,6 +42,7 @@ export function ExportDialog({ items, filenameBase }: Props) {
     onClose: () => setOpen(false),
     triggerRef,
   });
+  const { copy, copied } = useCopyToClipboard();
 
   const rows = useMemo(() => filterByDateRange(items, from || undefined, to || undefined), [items, from, to]);
   const running = progress !== null;
@@ -70,99 +73,115 @@ export function ExportDialog({ items, filenameBase }: Props) {
   };
 
   return (
-    <div className="relative">
-      <button
-        ref={triggerRef}
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
-        aria-haspopup="dialog"
-        aria-controls={`${id}-panel`}
-        disabled={items.length === 0}
-        className="px-3 py-2 rounded-lg border border-vx-border text-xs font-semibold text-vx-muted hover:text-vx-text hover:border-vx-sage/40 transition-colors disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-vx-sage"
-      >
-        {t("export.open")}
-      </button>
-
-      {open && (
-        <div
-          ref={panelRef}
-          id={`${id}-panel`}
-          role="dialog"
-          aria-label={t("export.title")}
-          className="absolute right-0 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-xl border border-vx-border bg-vx-card p-4 shadow-xl z-50 space-y-4 text-xs text-vx-muted"
+    <div className="flex items-center gap-2">
+      <div className="relative">
+        <button
+          ref={triggerRef}
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          aria-expanded={open}
+          aria-haspopup="dialog"
+          aria-controls={`${id}-panel`}
+          disabled={items.length === 0}
+          className="px-3 py-2 rounded-lg border border-vx-border text-xs font-semibold text-vx-muted hover:text-vx-text hover:border-vx-sage/40 transition-colors disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-vx-sage"
         >
-          <fieldset>
-            <legend className="font-medium mb-1">{t("export.format")}</legend>
-            <div className="flex gap-4">
-              {(["csv", "json"] as const).map((f) => (
-                <label key={f} className="flex items-center gap-1.5 uppercase">
-                  <input type="radio" name={`${id}-format`} checked={format === f} onChange={() => setFormat(f)} />
-                  {f}
-                </label>
-              ))}
+          {t("export.open")}
+        </button>
+
+        {open && (
+          <div
+            ref={panelRef}
+            id={`${id}-panel`}
+            role="dialog"
+            aria-label={t("export.title")}
+            className="absolute right-0 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-xl border border-vx-border bg-vx-card p-4 shadow-xl z-50 space-y-4 text-xs text-vx-muted"
+          >
+            <fieldset>
+              <legend className="font-medium mb-1">{t("export.format")}</legend>
+              <div className="flex gap-4">
+                {(["csv", "json"] as const).map((f) => (
+                  <label key={f} className="flex items-center gap-1.5 uppercase">
+                    <input type="radio" name={`${id}-format`} checked={format === f} onChange={() => setFormat(f)} />
+                    {f}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+
+            <fieldset>
+              <legend className="font-medium mb-1">{t("export.columns")}</legend>
+              <div className="grid grid-cols-2 gap-1">
+                {EXPORT_COLUMNS.map((col) => (
+                  <label key={col} className="flex items-center gap-1.5">
+                    <input type="checkbox" checked={columns.includes(col)} onChange={() => toggleColumn(col)} />
+                    {col}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+
+            <div className="grid grid-cols-2 gap-2">
+              <label className="flex flex-col gap-1">
+                {t("export.from")}
+                <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="bg-vx-surface border border-vx-border rounded-md px-2 py-1 text-vx-text" />
+              </label>
+              <label className="flex flex-col gap-1">
+                {t("export.to")}
+                <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="bg-vx-surface border border-vx-border rounded-md px-2 py-1 text-vx-text" />
+              </label>
             </div>
-          </fieldset>
 
-          <fieldset>
-            <legend className="font-medium mb-1">{t("export.columns")}</legend>
-            <div className="grid grid-cols-2 gap-1">
-              {EXPORT_COLUMNS.map((col) => (
-                <label key={col} className="flex items-center gap-1.5">
-                  <input type="checkbox" checked={columns.includes(col)} onChange={() => toggleColumn(col)} />
-                  {col}
-                </label>
-              ))}
-            </div>
-          </fieldset>
-
-          <div className="grid grid-cols-2 gap-2">
             <label className="flex flex-col gap-1">
-              {t("export.from")}
-              <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="bg-vx-surface border border-vx-border rounded-md px-2 py-1 text-vx-text" />
+              {t("export.filename")}
+              <input value={template} onChange={(e) => setTemplate(e.target.value)} className="bg-vx-surface border border-vx-border rounded-md px-2 py-1 text-vx-text" />
             </label>
-            <label className="flex flex-col gap-1">
-              {t("export.to")}
-              <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="bg-vx-surface border border-vx-border rounded-md px-2 py-1 text-vx-text" />
-            </label>
-          </div>
 
-          <label className="flex flex-col gap-1">
-            {t("export.filename")}
-            <input value={template} onChange={(e) => setTemplate(e.target.value)} className="bg-vx-surface border border-vx-border rounded-md px-2 py-1 text-vx-text" />
-          </label>
+            <p>{t("export.estimate", { count: String(rows.length) })}</p>
+            <p className="text-vx-dim">{t("export.loadedOnly")}</p>
 
-          <p>{t("export.estimate", { count: String(rows.length) })}</p>
-          <p className="text-vx-dim">{t("export.loadedOnly")}</p>
-
-          {running && (
-            <progress
-              className="w-full"
-              max={progress.total || 1}
-              value={progress.done}
-              aria-label={t("export.progress", { done: String(progress.done), total: String(progress.total) })}
-            />
-          )}
-          {error && <p role="alert" className="text-red-300">{error}</p>}
-
-          <div className="flex justify-end gap-2">
-            {running ? (
-              <button type="button" onClick={() => jobRef.current?.cancel()} className="px-3 py-1.5 rounded-lg border border-vx-border hover:text-vx-text">
-                {t("export.cancel")}
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={run}
-                disabled={rows.length === 0 || columns.length === 0}
-                className="px-3 py-1.5 rounded-lg border border-vx-sage/40 text-vx-sage font-semibold disabled:opacity-50"
-              >
-                {t("export.start")}
-              </button>
+            {running && (
+              <progress
+                className="w-full"
+                max={progress.total || 1}
+                value={progress.done}
+                aria-label={t("export.progress", { done: String(progress.done), total: String(progress.total) })}
+              />
             )}
+            {error && <p role="alert" className="text-red-300">{error}</p>}
+
+            <div className="flex justify-end gap-2">
+              {running ? (
+                <button type="button" onClick={() => jobRef.current?.cancel()} className="px-3 py-1.5 rounded-lg border border-vx-border hover:text-vx-text">
+                  {t("export.cancel")}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={run}
+                  disabled={rows.length === 0 || columns.length === 0}
+                  className="px-3 py-1.5 rounded-lg border border-vx-sage/40 text-vx-sage font-semibold disabled:opacity-50"
+                >
+                  {t("export.start")}
+                </button>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
+      <button
+        type="button"
+        onClick={() => copy(buildIntentsCsv(items))}
+        disabled={items.length === 0}
+        aria-label={t("export.copyCsv")}
+        title={t("export.copyCsv")}
+        className="inline-flex items-center gap-1 px-2 py-2 rounded-lg border border-vx-border text-xs font-semibold text-vx-muted hover:text-vx-text hover:border-vx-sage/40 transition-colors disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-vx-sage"
+      >
+        <svg aria-hidden="true" className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none">
+          <rect x="5.5" y="5.5" width="8" height="8" rx="1.5" stroke="currentColor" strokeWidth="1.3" />
+          <path d="M3 10.5V3.5A1.5 1.5 0 0 1 4.5 2h7" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+        </svg>
+        {copied && <span>{t("export.copiedCsv")}</span>}
+      </button>
     </div>
   );
 }
