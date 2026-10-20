@@ -67,3 +67,17 @@ state. Views are stored in `src/store/views.ts` (versioned through
 - A collapsible, read-only JSON inspector. It renders text nodes only (no
   `dangerouslySetInnerHTML`), strips bidi and zero-width characters, and shows
   large objects 50 entries at a time.
+
+## Column visibility
+
+The Explore table has a **Columns** menu (a disclosure button with one
+checkbox per column) wired to `useColumnVisibility`. Hidden columns are
+filtered out of the `columns` array passed to `DataTable`. The preference is
+stored in `localStorage` under `vortex:columns:explore` and survives reloads;
+it is not synced to the server.
+
+- The row-header column (**Amount**) is always visible; its checkbox is
+  disabled.
+- The menu is keyboard-operable: Enter/Space opens it, Tab and Space move
+  through and toggle the checkboxes, and Escape closes it and returns focus to
+  the button.
