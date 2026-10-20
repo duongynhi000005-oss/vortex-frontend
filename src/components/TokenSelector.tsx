@@ -6,10 +6,19 @@ import { flattenTokens, rankTokens, type SelectableToken } from "@/lib/tokenSear
 
 const STORE_KEY = "vortex:token-selector:v1";
 type Store = { favorites: string[]; recents: string[] };
-function readStore(): Store { try { const value = JSON.parse(localStorage.getItem(STORE_KEY) || "{}"); return { favorites: Array.isArray(value.favorites) ? value.favorites.slice(0, 50) : [], recents: Array.isArray(value.recents) ? value.recents.slice(0, 10) : [] }; } catch { return { favorites: [], recents: [] }; } }
+export function readStore(): Store { try { const value = JSON.parse(localStorage.getItem(STORE_KEY) || "{}"); return { favorites: Array.isArray(value.favorites) ? value.favorites.slice(0, 50) : [], recents: Array.isArray(value.recents) ? value.recents.slice(0, 10) : [] }; } catch { return { favorites: [], recents: [] }; } }
 function writeStore(value: Store) { try { localStorage.setItem(STORE_KEY, JSON.stringify(value)); } catch { /* storage is optional */ } }
 
 export type TokenSelectorProps = { open: boolean; onClose: () => void; chains: Chain[]; srcTokens: Record<string, Token[]>; value: SelectableToken | null; onSelect: (token: SelectableToken) => void };
+
+export function RecentTokenPills({ chains, srcTokens, value, onSelect }: Pick<TokenSelectorProps, "chains" | "srcTokens" | "value" | "onSelect">) {
+  const [recents, setRecents] = useState<string[]>([]);
+  useEffect(() => { setRecents(readStore().recents); }, [value]);
+  const tokens = useMemo(() => flattenTokens(chains, srcTokens), [chains, srcTokens]);
+  const pills = recents.slice(0, 5).map((key) => tokens.find((token) => token.symbol + ":" + token.chainId === key)).filter((token): token is SelectableToken => Boolean(token));
+  if (pills.length === 0) return null;
+  return <div role="group" aria-label="Recent tokens" className="flex gap-2 overflow-x-auto">{pills.map((token) => <button type="button" key={token.symbol + ":" + token.chainId} onClick={() => onSelect(token)} aria-pressed={value?.symbol === token.symbol && value?.chainId === token.chainId} className="shrink-0 rounded-full border border-vx-border bg-vx-surface px-3 py-1 text-xs text-vx-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-vx-lav"><span className="font-medium">{token.symbol}</span><span className="ml-1 text-vx-muted">{token.chainName}</span></button>)}</div>;
+}
 
 export default function TokenSelector({ open, onClose, chains, srcTokens, value, onSelect }: TokenSelectorProps) {
   const [query, setQuery] = useState(""); const [chainId, setChainId] = useState("all"); const [active, setActive] = useState(0); const [store, setStore] = useState<Store>({ favorites: [], recents: [] });
