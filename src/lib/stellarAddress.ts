@@ -73,6 +73,11 @@ export function isValidStellarPublicKey(address: string): boolean {
   );
 }
 
+/** Canonical account-address validator retained under the app-level name. */
+export function isValidStellarAddress(address: string): boolean {
+  return isValidStellarPublicKey(normalizeStellarAddress(address));
+}
+
 /**
  * Normalises a Stellar address for comparison: trims surrounding whitespace and
  * upper-cases it. Stellar strkeys are case-insensitive base32, so two addresses

@@ -22,6 +22,7 @@ import { useVotingPower } from "@/hooks/useVotingPower";
 import { timeRemaining } from "@/lib/time";
 import { getMessage } from "@/i18n/messages";
 import { signCommentMessage, verifySignedComment } from "@/lib/wallet/signMessage";
+import { ProposalPreviewCard } from "../ProposalPreviewCard";
 
 const MAX_COMMENT_LENGTH = 2000;
 const MIN_COMMENT_LENGTH = 1;
@@ -345,24 +346,7 @@ export default function ProposalDetailClient({ proposalId }: { proposalId: strin
         <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
           {/* ── Main column ──────────────────────────────────────────────── */}
           <div className="space-y-6">
-            {/* Proposal Details */}
-            <div className="card p-5 sm:p-6 space-y-4">
-              <h2 className="text-sm font-semibold text-vx-text">Proposal Description</h2>
-              <p className="text-xs sm:text-sm text-vx-muted leading-relaxed whitespace-pre-line">
-                {proposal.description}
-              </p>
-
-          <div className="grid grid-cols-2 sm:grid-cols-2 gap-4 pt-4 border-t border-vx-line">
-            <div className="bg-vx-surface/40 p-3 rounded-lg border border-vx-border">
-              <div className="text-xs text-vx-muted">Votes For</div>
-              <div className="text-lg font-bold text-vx-sage num">{proposal.votesFor.toLocaleString()}</div>
-            </div>
-            <div className="bg-vx-surface/40 p-3 rounded-lg border border-vx-border">
-              <div className="text-xs text-vx-muted">Votes Against</div>
-              <div className="text-lg font-bold text-vx-amber num">{proposal.votesAgainst.toLocaleString()}</div>
-            </div>
-          </div>
-        </div>
+            <ProposalPreviewCard proposal={proposal} />
 
         {/* ── Community Discussion / Comment Thread Section ── */}
         <section aria-labelledby="discussion-heading" className="card p-5 sm:p-6">

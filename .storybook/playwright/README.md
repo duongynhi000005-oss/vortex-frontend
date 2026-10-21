@@ -15,7 +15,7 @@ When you intentionally change component styles or add new stories:
 
 ```bash
 npm run build:storybook
-npm run test:visual -- --update
+npm run update:visual
 ```
 
 This updates the baseline images. Always review the changes in git before committing:
@@ -29,8 +29,9 @@ git diff .storybook/playwright/
 If you encounter font rendering differences between local and CI environments, regenerate baselines in the CI environment:
 
 1. Run visual tests in CI (GitHub Actions)
-2. Download the visual regression report artifact
-3. If baselines need updating, this is done automatically in CI to ensure consistent font rendering
+2. Apply the `update-snapshots` label to the pull request.
+3. The snapshot workflow regenerates and commits Chromium baselines to the PR branch.
+4. Review every changed image before approval.
 
 ## CI Integration
 

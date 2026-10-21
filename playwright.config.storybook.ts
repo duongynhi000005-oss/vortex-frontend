@@ -17,18 +17,26 @@ export default defineConfig({
   retries: process.env["CI"] ? 1 : 0,
   ...(process.env["CI"] ? { workers: 1 } : {}),
   reporter: [
+    ["github"],
     ["html", { open: "never", outputFolder: "playwright-report" }],
     ["blob"],
   ],
+  expect: { toHaveScreenshot: { animations: "disabled", caret: "hide" } },
+  snapshotPathTemplate: "{testDir}/__screenshots__/{projectName}/{arg}{ext}",
   use: {
     baseURL: "http://localhost:6006",
+    viewport: { width: 1440, height: 900 },
+    deviceScaleFactor: 1,
+    colorScheme: "dark",
+    locale: "en-US",
+    timezoneId: "UTC",
     trace: "on-first-retry",
     screenshot: "only-on-failure",
   },
   projects: [
     {
       name: "chromium",
-      use: { ...devices["Desktop Chrome"] },
+      use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 },
     },
   ],
   webServer: {

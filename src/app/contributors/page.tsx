@@ -3,26 +3,7 @@ import { Nav } from "@/components/Nav";
 import { Footer } from "@/components/Footer";
 import { SkeletonBlock } from "@/components/Skeleton";
 import { ContributorsList } from "./ContributorsList";
-
-interface GitHubContributor {
-  login: string;
-  avatar_url: string;
-  html_url: string;
-  contributions: number;
-}
-
-const REPO_OWNER = "stellar-vortex-protocol";
-const REPO_NAME = "vortex-frontend";
-const GITHUB_API = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contributors?per_page=100`;
-
-async function fetchContributors(): Promise<GitHubContributor[]> {
-  const res = await fetch(GITHUB_API, {
-    next: { revalidate: 3600 },
-    headers: { Accept: "application/vnd.github+json" },
-  });
-  if (!res.ok) throw new Error("Failed to load contributors");
-  return (await res.json()) as GitHubContributor[];
-}
+import { getContributors } from "@/lib/contributors";
 
 function ContributorsSkeleton() {
   return (
@@ -39,26 +20,8 @@ function ContributorsSkeleton() {
 }
 
 async function ContributorsContent() {
-  let contributors: GitHubContributor[] = [];
-  let failed = false;
-  try {
-    contributors = await fetchContributors();
-  } catch {
-    failed = true;
-  }
-
-  if (failed) {
-    return (
-      <div className="card p-8 text-center">
-        <h2 className="text-base font-semibold text-vx-text">Couldn&apos;t load contributors</h2>
-        <p className="mt-2 text-sm text-vx-muted">
-          We hit a rate limit or the GitHub API is unavailable. Try again shortly.
-        </p>
-      </div>
-    );
-  }
-
-  return <ContributorsList contributors={contributors} />;
+  const { contributors, source } = await getContributors();
+  return <ContributorsList contributors={contributors} source={source} />;
 }
 
 export default function ContributorsPage() {
