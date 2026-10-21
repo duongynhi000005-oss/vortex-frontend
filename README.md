@@ -214,14 +214,9 @@ The staging deployment targets Stellar Testnet and connects to a staging relay s
 
 ## Operations & Monitoring
 
-### Synthetic Uptime & Health Checks
+### Staging Synthetic Checks
 
-Production availability is monitored automatically via a scheduled GitHub Actions workflow (`.github/workflows/uptime-check.yml`):
-
-- **Frequency:** Probes every 30 minutes with `workflow_dispatch` manual trigger support.
-- **Frontend Probe:** Asserts HTTP `200` response and validates presence of core branding/HTML markup.
-- **Relay Health Probe:** Checks `NEXT_PUBLIC_API_URL/health` to ensure relay backend responsiveness.
-- **Transient Mitigation:** Executes automated retries with backoff before flagging incidents.
+A scheduled Playwright run (`.github/workflows/uptime-check.yml`) exercises the user path on staging every 15 minutes: page load, relay `/health`, live feed, WebSocket open, and a quote request. Failures open or update a single `incident` issue, and recovery closes it. Runbook, configuration, and the status page are in [`docs/synthetic-monitoring.md`](./docs/synthetic-monitoring.md).
 
 ---
 
