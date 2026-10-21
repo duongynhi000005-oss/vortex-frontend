@@ -1,0 +1,28 @@
+name: Release Please
+
+# Turns conventional commits on main into a release PR (package.json version,
+# CHANGELOG.md). Merging that PR tags vX.Y.Z and publishes a GitHub Release.
+# See docs/releasing.md.
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: release-please-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  release-please:
+    name: Open or update release PR
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: googleapis/release-please-action@a02a34c4d625f9be7cb89156071d8567266a2445 # v4.2.0
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json

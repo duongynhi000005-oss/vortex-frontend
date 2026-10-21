@@ -1,0 +1,32 @@
+name: PR Title Lint
+
+# Squash merges use the PR title as the commit subject, and release-please reads
+# that subject. So the title must follow commitlint's conventional rules.
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  commitlint-title:
+    name: Conventional PR title
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.4.0
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+
+      - run: npm ci --ignore-scripts
+
+      - name: Lint PR title
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: printf '%s' "$PR_TITLE" | npx --no -- commitlint

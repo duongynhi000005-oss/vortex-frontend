@@ -27,6 +27,9 @@ import { ENV_SCHEMA, SUSPICIOUS_PATTERNS, parseEnv } from "../src/lib/env-schema
 const SCHEMA_NAMES = ENV_SCHEMA.map((v) => v.name);
 // Set by Node/Next tooling rather than by the app's own configuration.
 const TOOLING_VARS = new Set(["NODE_ENV"]);
+// Build metadata set by next.config.mjs from package.json and the CI/Vercel
+// commit (src/lib/buildInfo.ts). Derived, not user configuration.
+const BUILD_METADATA_VARS = new Set(["NEXT_PUBLIC_APP_VERSION", "NEXT_PUBLIC_COMMIT_SHA", "NEXT_PUBLIC_BUILD_TIME"]);
 
 /** Variable names assigned in a dotenv file, in order (duplicates kept). */
 export function parseDotenvNames(text) {
@@ -86,7 +89,7 @@ export function checkEnv({ envExample, readme, sources, env, production }) {
 
   for (const { file, text } of sources) {
     for (const name of findEnvReferences(text)) {
-      if (!SCHEMA_NAMES.includes(name) && !TOOLING_VARS.has(name)) {
+      if (!SCHEMA_NAMES.includes(name) && !TOOLING_VARS.has(name) && !BUILD_METADATA_VARS.has(name)) {
         errors.push(`${file} reads process.env.${name}, which src/lib/env-schema.mjs doesn't define`);
       }
     }
