@@ -33,3 +33,7 @@ coverage/
 playwright-report/
 blob-report/
 test-results/
+
+# Mutation testing (Stryker)
+reports/
+.stryker-tmp/
