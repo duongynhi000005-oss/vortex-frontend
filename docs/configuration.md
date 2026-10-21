@@ -40,6 +40,27 @@ Invalid environment configuration:
 - the README "Required Environment Variables" table doesn't list exactly the schema's variables
 - source under `src/` reads a `process.env` variable the schema doesn't define
 - a `NEXT_PUBLIC_*` variable's name looks like a secret (see `docs/security-audit.md`)
+- the environment's manifest isn't satisfied (see below)
+
+## Per-environment manifests
+
+`config/environments/{development,preview,production}.json` hold the
+expectations for each deployment: which variables must be set, which networks
+are allowed, and whether localhost or plain `http://` / `ws://` is accepted.
+They contain rules only, never secret values. `scripts/env-manifest.mjs`
+checks an environment map against them, plus these cross-field invariants:
+
+- `mainnet` requires `https://` / `wss://` URLs that aren't localhost, in any environment
+- `NEXT_PUBLIC_WS_URL` must be on the same domain as `NEXT_PUBLIC_API_URL`
+- the settlement and solver registry contract IDs must differ when both are set
+
+Contract IDs are not required in any manifest, because they stay empty until
+deployed. The Stellar contract ID (`C…`) has the same prefix on every network,
+so the network is not checked against the contract ID's prefix.
+
+The environment is taken from `VORTEX_ENV`, then `VERCEL_ENV`, then
+`NODE_ENV`. CI sets `VORTEX_ENV` on its build steps: `production` in
+`deploy.yml` and `preview` in `preview-deploy.yml`.
 
 Preview deployments set `NEXT_PUBLIC_PREVIEW_*` secrets; `preview-deploy.yml`
 maps them onto the variables above, so the app itself only reads the names in

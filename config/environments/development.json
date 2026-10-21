@@ -1,0 +1,7 @@
+{
+  "environment": "development",
+  "requiredVars": ["NEXT_PUBLIC_API_URL", "NEXT_PUBLIC_NETWORK"],
+  "networks": ["testnet", "futurenet", "mainnet"],
+  "allowLocalhost": true,
+  "requireHttps": false
+}

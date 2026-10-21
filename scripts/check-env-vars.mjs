@@ -14,6 +14,13 @@
  *   http:// / ws:// to a non-local host when NODE_ENV=production)
  * - a NEXT_PUBLIC_* variable's name suggests a secret (it would be inlined
  *   into the browser bundle)
+ * - the environment's manifest (config/environments/<environment>.json) is
+ *   not satisfied: required variables missing, network not allowed, localhost
+ *   or http in a deployed environment, mismatched API/WS domains, mainnet
+ *   without https (see scripts/env-manifest.mjs)
+ *
+ * The environment is VORTEX_ENV, else VERCEL_ENV, else production when
+ * NODE_ENV=production and development otherwise.
  *
  * Usage:
  *   node scripts/check-env-vars.mjs
@@ -23,6 +30,7 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ENV_SCHEMA, SUSPICIOUS_PATTERNS, parseEnv } from "../src/lib/env-schema.mjs";
+import { ENVIRONMENTS, checkEnvironment, checkManifests } from "./env-manifest.mjs";
 
 const SCHEMA_NAMES = ENV_SCHEMA.map((v) => v.name);
 // Set by Node/Next tooling rather than by the app's own configuration.
@@ -79,9 +87,11 @@ function compareToSchema(label, names) {
 
 /**
  * Runs every check. `inputs` holds the file contents and environment so the
- * checks can be tested without touching disk.
+ * checks can be tested without touching disk. `manifests` (by environment
+ * name) and `environment` are optional; without them the manifest checks are
+ * skipped.
  */
-export function checkEnv({ envExample, readme, sources, env, production }) {
+export function checkEnv({ envExample, readme, sources, env, production, manifests, environment }) {
   const errors = [];
 
   for (const { file, text } of sources) {
@@ -102,6 +112,13 @@ export function checkEnv({ envExample, readme, sources, env, production }) {
   }
 
   errors.push(...parseEnv(env, { production }).errors);
+
+  if (manifests) {
+    errors.push(...checkManifests(manifests));
+    const manifest = manifests[environment];
+    if (manifest) errors.push(...checkEnvironment(manifest, env));
+    else errors.push(`no manifest for environment "${environment}"`);
+  }
 
   for (const name of Object.keys(env)) {
     if (!name.startsWith("NEXT_PUBLIC_")) continue;
@@ -129,6 +146,18 @@ function walk(dir, out = []) {
 function main() {
   const ROOT = join(fileURLToPath(new URL(".", import.meta.url)), "..");
   const production = process.env.NODE_ENV === "production";
+  const environment =
+    process.env.VORTEX_ENV || process.env.VERCEL_ENV || (production ? "production" : "development");
+  const manifests = Object.fromEntries(
+    ENVIRONMENTS.map((name) => {
+      try {
+        const file = join(ROOT, "config", "environments", `${name}.json`);
+        return [name, JSON.parse(readFileSync(file, "utf8"))];
+      } catch {
+        return [name, undefined];
+      }
+    }),
+  );
   const errors = checkEnv({
     envExample: readFileSync(join(ROOT, ".env.example"), "utf8"),
     readme: readFileSync(join(ROOT, "README.md"), "utf8"),
@@ -138,16 +167,18 @@ function main() {
     })),
     env: process.env,
     production,
+    manifests,
+    environment,
   });
 
   if (errors.length > 0) {
-    console.error(`❌  Environment check failed (${errors.length} problem(s)):\n`);
+    console.error(`❌  Environment check failed for "${environment}" (${errors.length} problem(s)):\n`);
     for (const error of errors) console.error(`  - ${error}`);
     console.error("\nSee docs/configuration.md for the variables and how to add one.");
     process.exit(1);
   }
   console.log(
-    `✅  ${SCHEMA_NAMES.length} environment variables: .env.example, README and source agree with the schema${
+    `✅  ${SCHEMA_NAMES.length} environment variables: .env.example, README and source agree with the schema; "${environment}" satisfies its manifest${
       production ? "; values are valid for production" : ""
     }.`,
   );

@@ -1,0 +1,11 @@
+{
+  "environment": "preview",
+  "requiredVars": [
+    "NEXT_PUBLIC_API_URL",
+    "NEXT_PUBLIC_WS_URL",
+    "NEXT_PUBLIC_NETWORK"
+  ],
+  "networks": ["testnet", "futurenet"],
+  "allowLocalhost": false,
+  "requireHttps": true
+}
