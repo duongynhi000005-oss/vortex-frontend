@@ -54,7 +54,7 @@ jobs:
             echo "Response status: $HTTP_CODE (Latency: ${LATENCY}ms)"
 
             if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 400 ]; then
-              if grep -qi -E "vortex|stellar|intent" response_fe.html || [ -s response_fe.html ]; then
+              if grep -qi -E "vortex|stellar|intent" response_fe.html; then
                 echo "Content validation passed: found expected frontend markup."
                 SUCCESS=true
                 break
