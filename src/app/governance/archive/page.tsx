@@ -3,9 +3,10 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { governanceStore } from '@/lib/governanceStore';
 import { isValidStellarAddress } from '@/lib/stellarAddress';
+import { ProposalStatusChip } from '@/components/ProposalStatusChip';
 import { toCsv } from '@/lib/csv';
 
-const STATUSES = ['all', 'passed', 'rejected', 'expired', 'executed'] as const;
+const STATUSES = ['all', 'active', 'queued', 'passed', 'rejected', 'expired', 'executed'] as const;
 type Status = (typeof STATUSES)[number];
 
 const PAGE_SIZE = 10;
@@ -179,7 +180,7 @@ export default async function GovernanceArchivePage({
                 <Link href={`/governance/${p.id}`} className="font-medium underline-offset-2 hover:underline">
                   {p.title}
                 </Link>
-                <span className="rounded bg-muted px-2 py-0.5 text-xs uppercase">{p.status}</span>
+                <ProposalStatusChip status={p.status} />
               </div>
               <dl className="mt-2 grid grid-cols-2 gap-2 text-xs text-muted-foreground sm:grid-cols-4">
                 <div>

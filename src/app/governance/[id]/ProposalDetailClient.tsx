@@ -14,6 +14,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Nav } from "@/components/Nav";
 import { ConnectWalletButton } from "@/components/ConnectWalletButton";
+import { ProposalStatusChip } from "@/components/ProposalStatusChip";
+import { TimelockBanner } from "@/components/TimelockBanner";
 import { VotePanel } from "@/components/VotePanel";
 import { VotingPowerPanel } from "@/components/VotingPowerPanel";
 import { useWalletStore } from "@/store/wallet";
@@ -322,17 +324,7 @@ export default function ProposalDetailClient({ proposalId }: { proposalId: strin
             <span className="text-xs px-2 py-0.5 rounded-full bg-vx-surface text-vx-muted border border-vx-border">
               {proposal.category}
             </span>
-            <span
-              className={`text-xs px-2.5 py-0.5 rounded-full font-medium w-fit ${
-                proposal.status === "active"
-                  ? "bg-vx-sage-bg text-vx-sage border border-vx-sage/30"
-                  : proposal.status === "passed"
-                  ? "bg-blue-500/10 text-blue-400 border border-blue-500/30"
-                  : "bg-red-500/10 text-red-400 border border-red-500/30"
-              }`}
-            >
-              {proposal.status}
-            </span>
+            <ProposalStatusChip status={proposal.status} />
           </div>
           <h1 className="text-2xl sm:text-3xl font-bold text-vx-text mb-3">{proposal.title}</h1>
           <p className="text-xs text-vx-muted">
@@ -341,6 +333,8 @@ export default function ProposalDetailClient({ proposalId }: { proposalId: strin
             · Expires in {timeRemaining(proposal.deadline)}
           </p>
         </div>
+
+        {proposal.status === "queued" && <TimelockBanner timelockEndsAt={proposal.timelockEndsAt} />}
 
         <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
           {/* ── Main column ──────────────────────────────────────────────── */}
