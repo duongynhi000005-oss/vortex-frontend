@@ -15,6 +15,10 @@ on:
         required: false
         default: 'https://api.vortex-protocol.org'
 
+permissions:
+  contents: read
+  issues: write
+
 concurrency:
   group: uptime-check
   cancel-in-progress: false
@@ -145,3 +149,17 @@ jobs:
           echo "- **Target URL:** \`$HEALTH_ENDPOINT\`" >> $GITHUB_STEP_SUMMARY
           echo "- **HTTP Code:** \`$HTTP_CODE\`" >> $GITHUB_STEP_SUMMARY
           echo "- **Latency:** \`${LATENCY}ms\`" >> $GITHUB_STEP_SUMMARY
+
+      - name: Create issue on failure
+        if: failure()
+        uses: actions/github-script@v9
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '[Uptime Check] Synthetic health check failed',
+              body: `The scheduled uptime check failed. Please investigate the frontend or backend relay.\n\nWorkflow run: ${context.server_url}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              labels: ['bug']
+            });
