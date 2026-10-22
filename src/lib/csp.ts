@@ -63,6 +63,12 @@ function safeOrigin(value: string | undefined, fallback: string): string {
  *    feasible without a custom style loader, so `'unsafe-inline'` is kept
  *    for styles only.  This is a much smaller attack surface than inline
  *    scripts because CSS cannot execute arbitrary JS.
+ *    Reviewed 2026-10-22: still blocked. Next.js inline critical-CSS and
+ *    runtime style injection do not carry the request nonce, so forwarding
+ *    `options.nonce` to `style-src` would break styling. Dropping
+ *    `'unsafe-inline'` requires disabling inline critical CSS (out of scope).
+ *    Re-evaluate once `CSP_REPORT_ONLY` data from `/api/csp-report` shows no
+ *    inline-style violations. See docs/security-audit.md.
  *
  * 3. `connect-src 'self' <API_ORIGIN> <WS_ORIGIN>`
  *    SWR fetches go to API_ORIGIN (REST).  The live intent WebSocket

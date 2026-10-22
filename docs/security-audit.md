@@ -447,3 +447,7 @@ An address-adjacent free-text field (such as a future memo field) currently bypa
 
 **Tests:** `src/lib/textSafety.test.ts` — real Unicode attack fixtures for every bidi control (U+202A–U+202E, U+2066–U+2069), every zero-width character (U+200B–U+200D, U+FEFF, U+00AD), combined payloads, safe ASCII/non-Latin strings asserted unchanged.
 
+
+## CSP `style-src 'unsafe-inline'` follow-up (2026-10-22)
+
+`buildCsp` keeps `style-src 'self' 'unsafe-inline'` even when `script-src` is nonce-based. A nonce-based `style-src` is **not currently feasible**: Next.js inline critical CSS and runtime style injection do not carry the request nonce, so enforcing it would break styling and hydration. Blocking condition: inline critical CSS must be disabled (or Next.js must nonce its inline styles), which is out of scope here. Trigger to revisit: `CSP_REPORT_ONLY` data from `/api/csp-report` showing no inline-style violations, or a Next.js upgrade that nonces inline styles. The accepted risk is CSS-injection data exfiltration, which requires a separate HTML-injection bug to exploit.
