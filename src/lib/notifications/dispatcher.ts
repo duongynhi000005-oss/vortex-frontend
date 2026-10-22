@@ -1,65 +1,120 @@
-import type { FeedItem } from "@/lib/types";
-import type { NotifiableStatus, NotificationPreferences } from "@/store/notificationPreferences";
+import { secureLogger } from "@/lib/secureLogging";
+import { loadJSON, saveJSON } from "@/lib/persist";
+import type { NotificationPreferences } from "@/store/notificationPreferences";
 
-export type NotificationPermissionState = NotificationPermission | "unsupported";
+export type NotificationPermissionState = "default" | "granted" | "denied" | "unsupported";
 
-export type DispatchContext = {
-  prefs: NotificationPreferences;
-  status: FeedItem["status"];
-  visible: boolean;
-  isLeader: boolean;
-  permission: NotificationPermissionState;
-  now: Date;
-};
-
-export type ChannelDecision = { toast: boolean; browser: boolean; sound: boolean };
-
-const NONE: ChannelDecision = { toast: false, browser: false, sound: false };
-
-function toMinutes(hhmm: string): number | null {
-  const m = /^(\d{2}):(\d{2})$/.exec(hhmm);
-  return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+export interface NotificationIntent {
+  status: string;
+  title: string;
+  body: string;
+  href: string;
 }
 
-export function isQuietHours(start: string, end: string, now: Date): boolean {
-  const s = toMinutes(start);
-  const e = toMinutes(end);
-  if (s === null || e === null || s === e) return false;
-  const cur = now.getHours() * 60 + now.getMinutes();
-  // Ranges may wrap past midnight (e.g. 22:00-07:00).
-  return s < e ? cur >= s && cur < e : cur >= s || cur < e;
+export interface NotificationHistoryEntry extends NotificationIntent {
+  id: string;
+  timestamp: number;
 }
 
-/**
- * Pure channel decision. Visible tab → in-app toast only (no double alert);
- * hidden tab → browser notification from the leader tab only, when granted.
- */
-export function decideChannels(ctx: DispatchContext): ChannelDecision {
-  const { prefs, status, visible, isLeader, permission, now } = ctx;
-  if (status === "pending" || !prefs.statuses[status as NotifiableStatus]) return NONE;
-  const quiet = isQuietHours(prefs.quietStart, prefs.quietEnd, now);
+export const NOTIFICATION_HISTORY_CAP = 50;
+const HISTORY_STORAGE_KEY = "vx.notifications.history";
 
-  if (visible) {
-    return { toast: prefs.channels.toast, browser: false, sound: prefs.channels.sound && !quiet };
-  }
-  const browser = prefs.channels.browser && permission === "granted" && isLeader && !quiet;
-  return {
-    // Toasts still queue in hidden tabs so they're seen on return, unless a
-    // browser notification already covered it.
-    toast: prefs.channels.toast && !browser,
-    browser,
-    sound: false,
+let history: NotificationHistoryEntry[] = [];
+let historyLoaded = false;
+const historyListeners = new Set<() => void>();
+
+function ensureHistoryLoaded(): void {
+  if (historyLoaded) return;
+  historyLoaded = true;
+  const stored = loadJSON<NotificationHistoryEntry[]>(HISTORY_STORAGE_KEY, []);
+  history = Array.isArray(stored) ? stored.slice(0, NOTIFICATION_HISTORY_CAP) : [];
+}
+
+function persistHistory(): void {
+  saveJSON(HISTORY_STORAGE_KEY, history);
+}
+
+function emitHistoryChange(): void {
+  for (const listener of historyListeners) listener();
+}
+
+export function getNotificationHistory(): NotificationHistoryEntry[] {
+  ensureHistoryLoaded();
+  return history;
+}
+
+export function subscribeNotificationHistory(listener: () => void): () => void {
+  historyListeners.add(listener);
+  return () => {
+    historyListeners.delete(listener);
   };
 }
 
-/** Notification copy. Amounts/tokens only appear when the user opted into details. */
-export function buildNotificationBody(items: FeedItem[], showDetails: boolean): { title: string; body: string; href: string } {
-  if (items.length > 1) {
-    return { title: "Vortex", body: `${items.length} of your intents updated`, href: "/my-intents" };
+export function clearNotificationHistory(): void {
+  ensureHistoryLoaded();
+  history = [];
+  persistHistory();
+  emitHistoryChange();
+}
+
+function recordHistory(intent: NotificationIntent): void {
+  ensureHistoryLoaded();
+  const entry: NotificationHistoryEntry = {
+    ...intent,
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    timestamp: Date.now(),
+  };
+  // Newest first; evict oldest entries past the cap.
+  history = [entry, ...history].slice(0, NOTIFICATION_HISTORY_CAP);
+  persistHistory();
+  emitHistoryChange();
+}
+
+export function buildNotificationBody(intent: NotificationIntent, showDetails: boolean): string {
+  return showDetails ? intent.body : intent.title;
+}
+
+export function decideChannels(
+  prefs: NotificationPreferences,
+  intent: NotificationIntent,
+  now: Date = new Date(),
+): { toast: boolean; browser: boolean; sound: boolean } {
+  const decision = {
+    toast: prefs.channels.toast && prefs.statuses[intent.status] !== false,
+    browser: prefs.channels.browser && prefs.statuses[intent.status] !== false,
+    sound: prefs.channels.sound && prefs.statuses[intent.status] !== false,
+  };
+
+  const suppressed = isQuietHours(prefs, now) || (!decision.toast && !decision.browser && !decision.sound);
+  if (suppressed) {
+    return { toast: false, browser: false, sound: false };
   }
-  const item = items[0] as FeedItem;
-  const body = showDetails
-    ? `${item.srcAmount} ${item.srcToken} → ${item.dstToken} is now ${item.status}`
-    : `Intent ${item.id.slice(0, 8)} is now ${item.status}`;
-  return { title: "Vortex", body, href: `/explore/${item.id}` };
+
+  // Record only notifications that are actually dispatched.
+  recordHistory(intent);
+  return decision;
+}
+
+function isQuietHours(prefs: NotificationPreferences, now: Date): boolean {
+  const { quietStart, quietEnd } = prefs;
+  if (!quietStart || !quietEnd || quietStart === quietEnd) return false;
+  const minutes = now.getHours() * 60 + now.getMinutes();
+  const [sh, sm] = quietStart.split(":").map(Number);
+  const [eh, em] = quietEnd.split(":").map(Number);
+  const start = sh * 60 + sm;
+  const end = eh * 60 + em;
+  return start < end ? minutes >= start && minutes < end : minutes >= start || minutes < end;
+}
+
+export function dispatchNotification(prefs: NotificationPreferences, intent: NotificationIntent): void {
+  const channels = decideChannels(prefs, intent);
+  if (!channels.toast && !channels.browser && !channels.sound) return;
+  const body = buildNotificationBody(intent, prefs.showDetails);
+  if (channels.browser && typeof Notification !== "undefined" && Notification.permission === "granted") {
+    try {
+      new Notification(intent.title, { body });
+    } catch (error) {
+      secureLogger.warn("Failed to show browser notification", error);
+    }
+  }
 }
