@@ -15,6 +15,7 @@
 import type { GovernanceProposal } from "@/lib/governanceApi";
 import { useVote, type VoteChoice, type VoteFlowStatus } from "@/hooks/useVote";
 import { formatVotingPower } from "@/hooks/useVotingPower";
+import { StickyActionBar } from "@/components/StickyActionBar";
 
 type Props = {
   proposal: GovernanceProposal;
@@ -237,16 +238,18 @@ export function VotePanel({ proposal, votingPower }: Props) {
         choice carefully before signing.
       </p>
 
-      {/* Submit */}
-      <button
-        type="button"
-        onClick={submit}
-        disabled={isPending}
-        className="w-full py-2.5 px-4 bg-vx-sage-bg text-vx-sage border border-vx-sage/30 rounded-lg text-sm font-semibold hover:bg-vx-sage/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        aria-busy={isPending}
-      >
-        {isPending ? STATUS_LABELS[status] ?? "Processing…" : "Submit Vote"}
-      </button>
+      {/* Submit — pinned to a sticky bar on mobile widths */}
+      <StickyActionBar label="Submit vote">
+        <button
+          type="button"
+          onClick={submit}
+          disabled={isPending}
+          className="w-full py-2.5 px-4 bg-vx-sage-bg text-vx-sage border border-vx-sage/30 rounded-lg text-sm font-semibold hover:bg-vx-sage/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          aria-busy={isPending}
+        >
+          {isPending ? STATUS_LABELS[status] ?? "Processing…" : "Submit Vote"}
+        </button>
+      </StickyActionBar>
     </div>
   );
 }
