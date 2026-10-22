@@ -6,6 +6,7 @@ import { useDelegation } from '@/hooks/useDelegation';
 import { sanitizeText } from '@/lib/textSafety';
 import { isSameStellarAddress, isValidStellarAddress } from '@/lib/stellarAddress';
 import { secureLogger } from '@/lib/secureLogging';
+import { AccountabilityBadge } from '@/components/AccountabilityBadge';
 
 interface DelegateProfile {
   address: string;
@@ -231,7 +232,10 @@ export default function DelegatesPage() {
             <li key={d.address} className="rounded-lg border p-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
-                  <p className="font-medium">{sanitizeText(d.name)}</p>
+                  <p className="flex flex-wrap items-center gap-2 font-medium">
+                    {sanitizeText(d.name)}
+                    <AccountabilityBadge profile={d} />
+                  </p>
                   <p className="font-mono text-xs break-all text-muted-foreground">{d.address}</p>
                 </div>
                 <button
