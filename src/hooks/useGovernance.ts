@@ -17,8 +17,7 @@ import type {
   ProposalFilters,
 } from "@/lib/governanceApi";
 import { validateCommentText } from "@/lib/textSafety";
-
-const MAX_COMMENT_LENGTH = 500;
+import { COMMENT_MAX_LENGTH } from "@/lib/governanceStore";
 
 // ─── useProposals ─────────────────────────────────────────────────────────────
 
@@ -98,7 +97,7 @@ export function useProposalComments(proposalId: string): UseProposalCommentsResu
     async (author: string, text: string) => {
       setPostError(null);
 
-      const validation = validateCommentText(text, MAX_COMMENT_LENGTH);
+      const validation = validateCommentText(text, COMMENT_MAX_LENGTH);
       if (!validation.valid) {
         setPostError(validation.error ?? "Invalid comment text.");
         return;

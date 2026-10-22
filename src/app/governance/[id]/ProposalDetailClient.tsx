@@ -22,8 +22,8 @@ import { useVotingPower } from "@/hooks/useVotingPower";
 import { timeRemaining } from "@/lib/time";
 import { getMessage } from "@/i18n/messages";
 import { signCommentMessage, verifySignedComment } from "@/lib/wallet/signMessage";
+import { COMMENT_MAX_LENGTH } from "@/lib/governanceStore";
 
-const MAX_COMMENT_LENGTH = 2000;
 const MIN_COMMENT_LENGTH = 1;
 const PAGE_SIZE = 20;
 const RATE_LIMIT_WINDOW_MS = 10_000;
@@ -203,7 +203,7 @@ export default function ProposalDetailClient({ proposalId }: { proposalId: strin
       return;
     }
 
-    const validation = validateCommentText(commentText, MAX_COMMENT_LENGTH);
+    const validation = validateCommentText(commentText, COMMENT_MAX_LENGTH);
     if (!validation.valid || commentText.trim().length < MIN_COMMENT_LENGTH) {
       setErrorMsg(validation.error || getMessage("solve.governance.emptyCommentError"));
       return;
