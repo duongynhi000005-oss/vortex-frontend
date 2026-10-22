@@ -74,15 +74,29 @@ export function buildNotificationBody(intent: NotificationIntent, showDetails: b
   return showDetails ? intent.body : intent.title;
 }
 
+/**
+ * Resolve whether sound is enabled for a given status. Falls back to the
+ * legacy flat `channels.sound` boolean when no per-status entry exists, so
+ * existing users keep their prior all-on/all-off preference.
+ */
+export function isSoundEnabledForStatus(prefs: NotificationPreferences, status: string): boolean {
+  const perStatus = prefs.channels.soundByStatus;
+  if (perStatus && typeof perStatus[status] === "boolean") {
+    return perStatus[status];
+  }
+  return prefs.channels.sound;
+}
+
 export function decideChannels(
   prefs: NotificationPreferences,
   intent: NotificationIntent,
   now: Date = new Date(),
 ): { toast: boolean; browser: boolean; sound: boolean } {
+  const statusEnabled = prefs.statuses[intent.status] !== false;
   const decision = {
-    toast: prefs.channels.toast && prefs.statuses[intent.status] !== false,
-    browser: prefs.channels.browser && prefs.statuses[intent.status] !== false,
-    sound: prefs.channels.sound && prefs.statuses[intent.status] !== false,
+    toast: prefs.channels.toast && statusEnabled,
+    browser: prefs.channels.browser && statusEnabled,
+    sound: isSoundEnabledForStatus(prefs, intent.status) && statusEnabled,
   };
 
   const suppressed = isQuietHours(prefs, now) || (!decision.toast && !decision.browser && !decision.sound);

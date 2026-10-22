@@ -97,14 +97,28 @@ export function NotificationSettings() {
           {t(permission === "denied" ? "notifications.permission.denied" : "notifications.permission.unsupported")}
         </p>
       )}
-      <label className="flex items-center gap-1.5">
-        <input
-          type="checkbox"
-          checked={prefs.channels.sound}
-          onChange={(e) => prefs.update({ channels: { ...prefs.channels, sound: e.target.checked } })}
-        />
-        {t("notifications.channel.sound")}
-      </label>
+      <div role="group" aria-label={t("notifications.channel.sound")} className="space-y-1">
+        <span className="block">{t("notifications.channel.sound")}</span>
+        <div className="flex flex-wrap gap-3">
+          {NOTIFIABLE_STATUSES.map((status) => (
+            <label key={status} className="flex items-center gap-1.5 capitalize">
+              <input
+                type="checkbox"
+                checked={prefs.channels.sound[status]}
+                onChange={(e) =>
+                  prefs.update({
+                    channels: {
+                      ...prefs.channels,
+                      sound: { ...prefs.channels.sound, [status]: e.target.checked },
+                    },
+                  })
+                }
+              />
+              {status}
+            </label>
+          ))}
+        </div>
+      </div>
       <label className="flex items-center gap-1.5">
         <input type="checkbox" checked={prefs.showDetails} onChange={(e) => prefs.update({ showDetails: e.target.checked })} />
         {t("notifications.showDetails")}
