@@ -6,7 +6,8 @@ import { useLocale, useSetLocale } from "@/lib/i18n/I18nProvider";
 import { useDismissableOverlay } from "@/hooks/useDismissableOverlay";
 
 type MotionPreference = "system" | "reduce" | "allow";
-type ThemePreference = "system" | "light" | "dark";
+type ThemePreference = "system" | "light" | "dark" | "high-contrast";
+type ResolvedTheme = "light" | "dark" | "high-contrast";
 
 const LOCALE_LABELS: Record<Locale, string> = {
   en: "English",
@@ -16,9 +17,10 @@ const LOCALE_LABELS: Record<Locale, string> = {
 const STORAGE_KEY = "vortex-motion-preference";
 const THEME_STORAGE_KEY = "vortex-theme-preference";
 
-const THEME_COLORS: Record<"light" | "dark", string> = {
+const THEME_COLORS: Record<ResolvedTheme, string> = {
   light: "#f8fafc",
   dark: "#0b1120",
+  "high-contrast": "#000000",
 };
 
 function applyMotionPreference(preference: MotionPreference) {
@@ -36,15 +38,15 @@ function systemPrefersDark(): boolean {
 function resolveTheme(
   preference: ThemePreference,
   prefersDark: boolean
-): "light" | "dark" {
+): ResolvedTheme {
   if (preference === "system") return prefersDark ? "dark" : "light";
   return preference;
 }
 
-function applyTheme(theme: "light" | "dark") {
+function applyTheme(theme: ResolvedTheme) {
   const root = document.documentElement;
   root.dataset["theme"] = theme;
-  root.style.colorScheme = theme;
+  root.style.colorScheme = theme === "high-contrast" ? "dark" : theme;
   const meta = document.querySelector<HTMLMetaElement>(
     'meta[name="theme-color"]'
   );
@@ -79,7 +81,9 @@ export function SettingsPanel() {
   useEffect(() => {
     const stored = localStorage.getItem(THEME_STORAGE_KEY);
     const preference: ThemePreference =
-      stored === "light" || stored === "dark" ? stored : "system";
+      stored === "light" || stored === "dark" || stored === "high-contrast"
+        ? stored
+        : "system";
     setThemePreference(preference);
     applyTheme(resolveTheme(preference, systemPrefersDark()));
   }, []);
@@ -228,6 +232,12 @@ export function SettingsPanel() {
                 </option>
                 <option value="dark" className="bg-vx-ink text-vx-text">
                   Dark
+                </option>
+                <option
+                  value="high-contrast"
+                  className="bg-vx-ink text-vx-text"
+                >
+                  High contrast
                 </option>
               </select>
             </div>
