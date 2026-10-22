@@ -4,6 +4,11 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "Barbieple-Devstem"
+    labels:
+      - "dependencies"
     groups:
       minor-and-patch:
         update-types:
@@ -23,6 +28,11 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "Barbieple-Devstem"
+    labels:
+      - "dependencies"
     groups:
       minor-and-patch:
         update-types:
