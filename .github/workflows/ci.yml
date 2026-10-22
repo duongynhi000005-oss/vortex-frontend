@@ -205,7 +205,7 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps ${{ matrix.browser }}
       - name: Run Playwright tests
-        run: npx playwright test --project=${{ matrix.browser }} --shard=${{ matrix.shard }}/${{ strategy.job-total }}
+        run: npx playwright test --project=${{ matrix.browser }}
         env:
           PLAYWRIGHT_RETRIES: '2'
       - name: Report flaky tests
@@ -266,17 +266,6 @@ jobs:
           npm run test:storybook
       - name: Run visual regression tests
         run: npm run test:visual
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1
-      - name: Build Storybook
-        run: npm run build:storybook
-      - name: Run Storybook accessibility tests
-        run: |
-          npx playwright install --with-deps chromium
-          npx --yes http-server storybook-static --port 6006 --silent &
-          npx --yes wait-on --timeout 60000 tcp:127.0.0.1:6006
-          npm run test:storybook
-      - name: Run visual regression tests
-        run: npm run test:visual
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
@@ -284,31 +273,6 @@ jobs:
           path: blob-report/
           retention-days: 30
 
-  e2e:
-    name: E2E (Playwright)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: '.nvmrc'
-          cache: 'npm'
-      - run: npm ci
-      - name: Check dependencies for supply-chain security (Issue #311)
-        run: node scripts/check-dependencies.mjs
-        env:
-          PR_BODY: ${{ github.event.pull_request.body }}
-          GITHUB_ACTOR: ${{ github.actor }}
-      - name: Lint lockfile
-        run: npm ls --all > /dev/null
-      - name: Generate SBOM
-        run: npx --yes @cy
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: '.nvmrc'
-          cache: 'npm'
-      - run: npm ci
   security:
     name: Security & supply chain
     runs-on: ubuntu-latest
@@ -339,8 +303,8 @@ jobs:
           path: sbom.json
           retention-days: 30
 
-  e2e:
-    name: E2E (Playwright)
+  e2e-smoke:
+    name: E2E smoke (Playwright, chromium)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -376,12 +340,12 @@ jobs:
   ci-success:
     name: ci-success
     if: always()
-    needs: [static, unit, build, e2e, storybook-visual, security]
+    needs: [frontend, unit, build, e2e, storybook-visual, security]
     runs-on: ubuntu-latest
     steps:
       - name: Verify all required jobs succeeded
         run: |
-          echo "static=${{ needs.static.result }}"
+          echo "frontend=${{ needs.frontend.result }} }}"
           echo "unit=${{ needs.unit.result }}"
           echo "build=${{ needs.build.result }}"
           echo "e2e=${{ needs.e2e.result }}"
