@@ -11,6 +11,19 @@ export class UntrustedOriginError extends Error {
 }
 
 /**
+ * Throws `UntrustedOriginError` unless the current origin is trusted. Cheap and
+ * synchronous: call it again immediately before `signTransaction` to close the
+ * gap between the precondition check and the actual signing call.
+ */
+export function checkOriginTrusted(): void {
+  const hostname = window.location.hostname;
+  const protocol = window.location.protocol.replace(":", "");
+  if (evaluateOrigin(hostname, protocol, getTrustedOrigins()) === "untrusted") {
+    throw new UntrustedOriginError(hostname);
+  }
+}
+
+/**
  * Precondition check before any wallet signing operation.
  *
  * Verifies that:
@@ -27,14 +40,7 @@ export function assertWalletReady(): { address: string; network: string } {
     throw new Error(state.error ?? "Connect a wallet to continue.");
   }
 
-  const hostname = window.location.hostname;
-  const protocol = window.location.protocol.replace(":", "");
-  const trusted = getTrustedOrigins();
-  const trustLevel = evaluateOrigin(hostname, protocol, trusted);
-
-  if (trustLevel === "untrusted") {
-    throw new UntrustedOriginError(hostname);
-  }
+  checkOriginTrusted();
 
   return { address: state.address, network: state.network ?? "" };
 }

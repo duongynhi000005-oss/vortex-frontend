@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 import { mutate } from "swr";
 import { walletAdapter } from "@/lib/wallet";
-import { assertWalletReady } from "@/lib/wallet/assertWalletReady";
+import { assertWalletReady, checkOriginTrusted } from "@/lib/wallet/assertWalletReady";
 import { registerSolver, submitSolverRegistration } from "@/lib/api";
 import { ApiError } from "@/lib/api";
 import { verifySignedXdrMatches } from "@/lib/xdrReview";
@@ -91,6 +91,7 @@ export function useSolverRegistration() {
       // Origin-trust guard: refuse to sign on untrusted origins.
       assertWalletReady();
 
+      checkOriginTrusted();
       const signedXdr = await walletAdapter.signTransaction(unsignedXdr, {
         network: wallet.network ?? undefined,
       });
