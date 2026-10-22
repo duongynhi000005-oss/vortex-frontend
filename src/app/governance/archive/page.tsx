@@ -168,6 +168,26 @@ export default async function GovernanceArchivePage({
         </button>
       </form>
 
+      {rows.length >= 2 && (
+        <form action="/governance/compare" method="get" className="mb-4 flex flex-wrap items-end gap-3 text-sm">
+          {(['a', 'b'] as const).map((name, i) => (
+            <label key={name} className="flex flex-col gap-1">
+              Compare {i === 0 ? 'first' : 'second'} proposal
+              <select name={name} defaultValue={rows[i]?.id} className="rounded border px-2 py-1">
+                {rows.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.id}: {p.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ))}
+          <button type="submit" className="rounded border px-3 py-2 text-sm">
+            Compare
+          </button>
+        </form>
+      )}
+
       {rows.length === 0 ? (
         <p className="rounded border border-dashed p-6 text-center text-sm text-muted-foreground">
           No proposals match the selected filters.

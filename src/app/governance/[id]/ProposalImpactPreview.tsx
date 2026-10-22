@@ -29,7 +29,7 @@ export function ProposalImpactPreview({ proposal }: { proposal: GovernancePropos
   );
 }
 
-function BondImpact({ currentValue, proposedValue }: { currentValue: number; proposedValue: number }) {
+export function BondImpact({ currentValue, proposedValue }: { currentValue: number; proposedValue: number }) {
   const { t } = useTranslation();
   const { solvers, isLoading, error } = useSolvers();
 

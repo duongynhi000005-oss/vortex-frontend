@@ -347,6 +347,12 @@ export default function ProposalDetailClient({ proposalId }: { proposalId: strin
           >
             {isSubscribed ? "Notifications on" : "Notify me"}
           </button>
+          <Link
+            href={`/governance/compare?a=${encodeURIComponent(proposal.id)}`}
+            className="ml-2 px-3 py-1.5 text-xs font-semibold text-vx-sage border border-vx-sage/30 rounded-lg hover:bg-vx-sage/10 transition-colors inline-block focus-visible:outline focus-visible:outline-2"
+          >
+            Compare
+          </Link>
           {reminders.map((r, i) => (
             <p key={`${r.kind}-${i}`} role="status" className="text-xs text-vx-sage">
               {r.message}
