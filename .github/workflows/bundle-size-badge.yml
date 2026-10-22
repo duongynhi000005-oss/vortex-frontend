@@ -35,16 +35,21 @@ jobs:
           BUNDLE_LINE=$(grep "Client JS bundle size:" /tmp/bundle-output.txt)
           # Extract size in KB from "Client JS bundle size: XXX.X KB (limit: YYY.Y KB)"
           BUNDLE_KB=$(echo "$BUNDLE_LINE" | sed -E 's/.*: ([0-9.]+) KB.*/\1/')
+          # Extract the enforced limit (derived from MAX_BUNDLE_SIZE_BYTES in the script)
+          LIMIT_KB=$(echo "$BUNDLE_LINE" | sed -E 's/.*limit: ([0-9.]+) KB.*/\1/')
           echo "bundle_kb=$BUNDLE_KB" >> $GITHUB_OUTPUT
+          echo "limit_kb=$LIMIT_KB" >> $GITHUB_OUTPUT
 
       - name: Create badge SVG
         run: |
           BUNDLE_KB=${{ steps.bundle.outputs.bundle_kb }}
+          LIMIT_KB=${{ steps.bundle.outputs.limit_kb }}
           
-          # Determine color based on bundle size (under 1.2MB is green, 1.2-1.4 is yellow, over 1.4 is red)
-          if (( $(echo "$BUNDLE_KB < 1200" | bc -l) )); then
+          # Color thresholds derive from the limit enforced in CI (MAX_BUNDLE_SIZE_BYTES):
+          # green below 80% of the limit, yellow up to the limit, red above it
+          if (( $(echo "$BUNDLE_KB < $LIMIT_KB * 0.8" | bc -l) )); then
             COLOR="brightgreen"
-          elif (( $(echo "$BUNDLE_KB < 1400" | bc -l) )); then
+          elif (( $(echo "$BUNDLE_KB <= $LIMIT_KB" | bc -l) )); then
             COLOR="yellow"
           else
             COLOR="red"
