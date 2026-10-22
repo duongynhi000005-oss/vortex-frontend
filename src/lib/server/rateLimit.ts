@@ -1,25 +1,44 @@
-/**
- * In-memory per-key token bucket. Per-instance only (not shared across
- * serverless instances) — adequate to blunt abuse of the verification proxy.
- */
-export function createTokenBucket(capacity: number, refillPerSecond: number, maxKeys = 10_000) {
-  const buckets = new Map<string, { tokens: number; updatedAt: number }>();
+export type BucketState = { tokens: number; updatedAt: number };
 
-  return function take(key: string, now: number = Date.now()): boolean {
-    let bucket = buckets.get(key);
-    if (!bucket) {
-      if (buckets.size >= maxKeys) {
+/** Storage layer behind the token bucket; swap to share state across instances. */
+export interface RateLimitStore {
+  get(key: string): BucketState | undefined;
+  set(key: string, state: BucketState): void;
+}
+
+export function createMemoryStore(maxKeys = 10_000): RateLimitStore {
+  const buckets = new Map<string, BucketState>();
+  return {
+    get: (key) => buckets.get(key),
+    set(key, state) {
+      if (!buckets.has(key) && buckets.size >= maxKeys) {
         const oldest = buckets.keys().next().value;
         if (oldest !== undefined) buckets.delete(oldest);
       }
-      bucket = { tokens: capacity, updatedAt: now };
-      buckets.set(key, bucket);
-    }
-    const elapsed = Math.max(0, now - bucket.updatedAt) / 1000;
-    bucket.tokens = Math.min(capacity, bucket.tokens + elapsed * refillPerSecond);
-    bucket.updatedAt = now;
-    if (bucket.tokens < 1) return false;
-    bucket.tokens -= 1;
-    return true;
+      buckets.set(key, state);
+    },
+  };
+}
+
+/**
+ * Per-key token bucket. The default store is in-memory and therefore
+ * per-instance: on a horizontally scaled deployment the effective burst is
+ * `capacity * warmInstances`. Accepted tradeoff — see docs/security-audit.md
+ * ("Rate limiting"); no shared backend (KV/Redis) is provisioned by the
+ * project. Pass a shared `store` to enforce one combined limit.
+ */
+export function createTokenBucket(
+  capacity: number,
+  refillPerSecond: number,
+  maxKeys = 10_000,
+  store: RateLimitStore = createMemoryStore(maxKeys),
+) {
+  return function take(key: string, now: number = Date.now()): boolean {
+    const prev = store.get(key) ?? { tokens: capacity, updatedAt: now };
+    const elapsed = Math.max(0, now - prev.updatedAt) / 1000;
+    const tokens = Math.min(capacity, prev.tokens + elapsed * refillPerSecond);
+    const allowed = tokens >= 1;
+    store.set(key, { tokens: allowed ? tokens - 1 : tokens, updatedAt: now });
+    return allowed;
   };
 }

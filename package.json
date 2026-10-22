@@ -16,6 +16,8 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
+    "check:no-empty-modules": "node scripts/check-no-empty-modules.mjs",
+    "check:single-ssrf-guard": "node scripts/check-single-ssrf-guard.mjs",
     "check:i18n": "node scripts/check-i18n-parity.mjs",
     "check:docs": "node scripts/check-docs.mjs",
     "check:manifest": "node scripts/check-manifest.mjs",

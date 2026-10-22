@@ -1,4 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { clientIp } from "@/lib/server/clientIp";
+import { createTokenBucket } from "@/lib/server/rateLimit";
 import { isValidStellarPublicKey } from "@/lib/stellarAddress";
 
 export const runtime = "nodejs";
@@ -11,6 +13,9 @@ const HORIZON_BY_NETWORK: Record<string, string> = {
   public: "https://horizon.stellar.org",
 };
 
+// 30 burst, 1 request / 2 s per IP: one cheap upstream call, UI polls while funding.
+const takeToken = createTokenBucket(30, 1 / 2);
+
 /**
  * GET /api/account-status?address=G...
  *
@@ -20,6 +25,9 @@ const HORIZON_BY_NETWORK: Record<string, string> = {
  * ledger (Horizon 404) is unfunded.
  */
 export async function GET(req: NextRequest) {
+  if (!takeToken(clientIp(req))) {
+    return NextResponse.json({ error: "rate-limited" }, { status: 429, headers: { "Retry-After": "2" } });
+  }
   const address = req.nextUrl.searchParams.get("address") ?? "";
   if (!isValidStellarPublicKey(address)) {
     return NextResponse.json({ error: "invalid-address" }, { status: 400 });

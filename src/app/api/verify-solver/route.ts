@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { safeFetch } from "@/lib/server/safeFetch";
 import { createTokenBucket } from "@/lib/server/rateLimit";
+import { clientIp } from "@/lib/server/clientIp";
 import { normalizeDomain } from "@/lib/server/domain";
 import { parseStellarToml } from "@/lib/stellarToml";
 import { secureLogger } from "@/lib/secureLogging";
@@ -16,10 +17,6 @@ type CacheEntry = { at: number; ok: true; data: VerifySolverResponse } | { at: n
 const cache = new Map<string, CacheEntry>();
 // 10 requests burst, refilling at 1 request / 6 s per client IP.
 const takeToken = createTokenBucket(10, 1 / 6);
-
-function clientIp(req: NextRequest): string {
-  return req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || req.ip || "unknown";
-}
 
 function remember(key: string, entry: CacheEntry) {
   if (cache.size >= MAX_CACHE_ENTRIES) {
