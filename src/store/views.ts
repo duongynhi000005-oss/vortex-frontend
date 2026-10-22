@@ -79,6 +79,33 @@ export function viewParamsToSearch(params: ViewParams): string {
   return qs ? `?${qs}` : "";
 }
 
+/**
+ * Extracts the query params from a pasted shared-view URL or bare query string.
+ * Returns `null` when the input cannot be parsed as a URL/query at all.
+ */
+export function parseViewImport(input: string): ViewParams | null {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+  let search: string;
+  if (trimmed.startsWith("?")) {
+    search = trimmed;
+  } else if (/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)) {
+    try {
+      search = new URL(trimmed).search;
+    } catch {
+      return null;
+    }
+  } else if (trimmed.includes("=")) {
+    // Bare query string without a leading "?".
+    search = `?${trimmed}`;
+  } else {
+    return null;
+  }
+  const params: ViewParams = {};
+  for (const [key, value] of new URLSearchParams(search)) params[key] = value;
+  return params;
+}
+
 /** Sanitises a user-supplied view name and resolves collisions with " (2)", " (3)"... */
 export function normalizeViewName(raw: string, existing: readonly string[]): string {
   const base = sanitizeDisplayText(raw).replace(/\s+/g, " ").trim().slice(0, MAX_VIEW_NAME_LENGTH);

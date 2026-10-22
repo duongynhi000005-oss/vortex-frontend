@@ -27,6 +27,27 @@ const chipClass =
 const iconBtnClass =
   "px-1.5 py-0.5 rounded text-xs text-vx-muted hover:text-vx-text disabled:opacity-40 focus:outline-none focus-visible:ring-2 focus-visible:ring-vx-sage";
 
+/**
+ * Extracts the query string from a pasted URL or bare query string.
+ * Returns null when the input cannot be parsed as a URL.
+ */
+function extractSearch(input: string): string | null {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+  // Bare query string (with or without leading "?").
+  if (trimmed.startsWith("?") || !trimmed.includes("://")) {
+    const q = trimmed.startsWith("?") ? trimmed.slice(1) : trimmed;
+    // A bare query string must not contain a path/space; treat as search params.
+    if (!q.includes(" ")) return q;
+  }
+  try {
+    const url = new URL(trimmed, window.location.origin);
+    return url.search.startsWith("?") ? url.search.slice(1) : url.search;
+  } catch {
+    return null;
+  }
+}
+
 /** Saved + built-in filter views with keyboard-operable rename/delete/reorder (#442). */
 export function SavedViews({ scope, currentParams, onApply }: SavedViewsProps) {
   const { t } = useTranslation();
@@ -40,6 +61,9 @@ export function SavedViews({ scope, currentParams, onApply }: SavedViewsProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importUrl, setImportUrl] = useState("");
+  const [importName, setImportName] = useState("");
 
   const currentSearch = viewParamsToSearch(currentParams);
   const isActive = (params: ViewParams) => viewParamsToSearch(params) === currentSearch;
@@ -62,6 +86,29 @@ export function SavedViews({ scope, currentParams, onApply }: SavedViewsProps) {
     const id = saveView(scope, draftName, currentParams);
     setNotice(id ? t("views.notice.saved") : t("views.notice.saveFailed", { max: MAX_VIEWS }));
     if (id) setDraftName(null);
+  };
+
+  const submitImport = () => {
+    if (allViews.length >= MAX_VIEWS) {
+      setNotice(t("views.notice.saveFailed", { max: MAX_VIEWS }));
+      return;
+    }
+    const search = extractSearch(importUrl);
+    if (search === null) {
+      setNotice(t("views.notice.importInvalid"));
+      return;
+    }
+    const raw: ViewParams = Object.fromEntries(new URLSearchParams(search).entries());
+    const { params: clean, degraded } = sanitizeViewParams(scope, raw);
+    const id = saveView(scope, importName, clean);
+    if (!id) {
+      setNotice(t("views.notice.saveFailed", { max: MAX_VIEWS }));
+      return;
+    }
+    setNotice(degraded ? t("views.notice.degraded") : t("views.notice.imported"));
+    setImportOpen(false);
+    setImportUrl("");
+    setImportName("");
   };
 
   const submitRename = () => {
@@ -121,6 +168,57 @@ export function SavedViews({ scope, currentParams, onApply }: SavedViewsProps) {
               {t("views.cancel")}
             </button>
           </form>
+        )}
+        {importOpen ? (
+          <form
+            className="flex flex-wrap items-center gap-1"
+            onSubmit={(e) => {
+              e.preventDefault();
+              submitImport();
+            }}
+          >
+            <label className="sr-only" htmlFor={`view-import-url-${scope}`}>
+              {t("views.importUrlLabel")}
+            </label>
+            <input
+              id={`view-import-url-${scope}`}
+              autoFocus
+              type="text"
+              value={importUrl}
+              onChange={(e) => setImportUrl(e.target.value)}
+              onKeyDown={(e) => e.key === "Escape" && setImportOpen(false)}
+              placeholder={t("views.importUrlPlaceholder")}
+              className="bg-vx-surface border border-vx-border rounded-lg px-2 py-1 text-xs text-vx-text focus:outline-none focus-visible:ring-2 focus-visible:ring-vx-sage"
+            />
+            <label className="sr-only" htmlFor={`view-import-name-${scope}`}>
+              {t("views.nameLabel")}
+            </label>
+            <input
+              id={`view-import-name-${scope}`}
+              type="text"
+              value={importName}
+              maxLength={MAX_VIEW_NAME_LENGTH}
+              onChange={(e) => setImportName(e.target.value)}
+              onKeyDown={(e) => e.key === "Escape" && setImportOpen(false)}
+              placeholder={t("views.nameLabel")}
+              className="bg-vx-surface border border-vx-border rounded-lg px-2 py-1 text-xs text-vx-text focus:outline-none focus-visible:ring-2 focus-visible:ring-vx-sage"
+            />
+            <button type="submit" className={iconBtnClass} disabled={allViews.length >= MAX_VIEWS}>
+              {t("views.confirm")}
+            </button>
+            <button type="button" onClick={() => setImportOpen(false)} className={iconBtnClass}>
+              {t("views.cancel")}
+            </button>
+          </form>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setImportOpen(true)}
+            disabled={allViews.length >= MAX_VIEWS}
+            className={`${chipClass} border-vx-border text-vx-muted hover:text-vx-text disabled:opacity-40`}
+          >
+            {t("views.import")}
+          </button>
         )}
       </div>
 
