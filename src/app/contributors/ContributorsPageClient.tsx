@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Nav } from "@/components/Nav";
 import type { ComplexityTier, IssueStatus, WaveMetrics } from "@/lib/issuesParser";
 import { useTranslation } from "@/lib/i18n/I18nProvider";
@@ -22,6 +23,11 @@ const TIER_LABEL_KEY: Record<ComplexityTier, MessageKey> = {
   High: "wave.tier.high",
 };
 
+const COMPLEXITY_VALUES: readonly string[] = ["Trivial", "Medium", "High"];
+const STATUS_VALUES: readonly string[] = ["Completed", "In Progress", "Open"];
+
+type FilterParam = "category" | "complexity" | "status" | "q" | "goodFirstOnly";
+
 function truncateAddress(addr: string): string {
   if (!addr || addr.length < 10) return addr;
   return `${addr.slice(0, 4)}...${addr.slice(-4)}`;
@@ -29,11 +35,35 @@ function truncateAddress(addr: string): string {
 
 export default function ContributorsPageClient({ metrics }: { metrics: WaveMetrics }) {
   const { t } = useTranslation();
-  const [selectedCategory, setSelectedCategory] = useState<string>("all");
-  const [selectedComplexity, setSelectedComplexity] = useState<string>("all");
-  const [selectedStatus, setSelectedStatus] = useState<string>("all");
-  const [searchQuery, setSearchQuery] = useState<string>("");
-  const [goodFirstOnly, setGoodFirstOnly] = useState(false);
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  // Initial filter state comes from the URL; unknown values fall back to "all".
+  const pick = (name: FilterParam, allowed: readonly string[]): string => {
+    const value = searchParams?.get(name);
+    return value && allowed.includes(value) ? value : "all";
+  };
+  const [selectedCategory, setSelectedCategory] = useState<string>(() =>
+    pick("category", metrics.categories.map((c) => c.category)),
+  );
+  const [selectedComplexity, setSelectedComplexity] = useState<string>(() =>
+    pick("complexity", COMPLEXITY_VALUES),
+  );
+  const [selectedStatus, setSelectedStatus] = useState<string>(() => pick("status", STATUS_VALUES));
+  const [searchQuery, setSearchQuery] = useState<string>(() => searchParams?.get("q") ?? "");
+  const [goodFirstOnly, setGoodFirstOnly] = useState(() => searchParams?.get("goodFirstOnly") === "1");
+
+  const syncUrl = (name: FilterParam, value: string) => {
+    const next = new URLSearchParams(searchParams?.toString() ?? "");
+    if (value === "" || value === "all" || (name === "goodFirstOnly" && value !== "1")) {
+      next.delete(name);
+    } else {
+      next.set(name, value);
+    }
+    const query = next.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  };
 
   const filteredIssues = metrics.issues.filter((issue) => {
     if (selectedCategory !== "all" && issue.category !== selectedCategory) return false;
@@ -241,13 +271,19 @@ export default function ContributorsPageClient({ metrics }: { metrics: WaveMetri
                 type="text"
                 placeholder={t("wave.issues.search")}
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  syncUrl("q", e.target.value);
+                }}
                 className="bg-vx-surface border border-vx-border rounded-lg px-3 py-2 text-xs text-vx-text placeholder-vx-dim focus:outline-none focus:border-vx-sage/50"
               />
 
               <select
                 value={selectedCategory}
-                onChange={(e) => setSelectedCategory(e.target.value)}
+                onChange={(e) => {
+                  setSelectedCategory(e.target.value);
+                  syncUrl("category", e.target.value);
+                }}
                 className="bg-vx-surface border border-vx-border rounded-lg px-3 py-2 text-xs text-vx-text focus:outline-none focus:border-vx-sage/50"
               >
                 <option value="all">{t("wave.issues.allCategories")}</option>
@@ -260,7 +296,10 @@ export default function ContributorsPageClient({ metrics }: { metrics: WaveMetri
 
               <select
                 value={selectedComplexity}
-                onChange={(e) => setSelectedComplexity(e.target.value)}
+                onChange={(e) => {
+                  setSelectedComplexity(e.target.value);
+                  syncUrl("complexity", e.target.value);
+                }}
                 className="bg-vx-surface border border-vx-border rounded-lg px-3 py-2 text-xs text-vx-text focus:outline-none focus:border-vx-sage/50"
               >
                 <option value="all">{t("wave.issues.allComplexities")}</option>
@@ -271,7 +310,10 @@ export default function ContributorsPageClient({ metrics }: { metrics: WaveMetri
 
               <select
                 value={selectedStatus}
-                onChange={(e) => setSelectedStatus(e.target.value)}
+                onChange={(e) => {
+                  setSelectedStatus(e.target.value);
+                  syncUrl("status", e.target.value);
+                }}
                 className="bg-vx-surface border border-vx-border rounded-lg px-3 py-2 text-xs text-vx-text focus:outline-none focus:border-vx-sage/50"
               >
                 <option value="all">{t("wave.issues.allStatuses")}</option>
@@ -284,7 +326,10 @@ export default function ContributorsPageClient({ metrics }: { metrics: WaveMetri
                 <input
                   type="checkbox"
                   checked={goodFirstOnly}
-                  onChange={(e) => setGoodFirstOnly(e.target.checked)}
+                  onChange={(e) => {
+                    setGoodFirstOnly(e.target.checked);
+                    syncUrl("goodFirstOnly", e.target.checked ? "1" : "");
+                  }}
                   className="accent-vx-sage focus:outline-none focus-visible:ring-2 focus-visible:ring-vx-sage"
                 />
                 Good first issues only
