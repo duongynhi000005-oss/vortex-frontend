@@ -16,6 +16,7 @@ import { Nav } from "@/components/Nav";
 import { ConnectWalletButton } from "@/components/ConnectWalletButton";
 import { ProposalStatusChip } from "@/components/ProposalStatusChip";
 import { TimelockBanner } from "@/components/TimelockBanner";
+import { useProposalSubscriptions } from "@/hooks/useProposalSubscriptions";
 import { VotePanel } from "@/components/VotePanel";
 import { VotingPowerPanel } from "@/components/VotingPowerPanel";
 import { useWalletStore } from "@/store/wallet";
@@ -238,6 +239,8 @@ export default function ProposalDetailClient({ proposalId }: { proposalId: strin
     }
   };
 
+  const { isSubscribed, toggle: toggleSubscription, reminders } = useProposalSubscriptions(proposal, userAddress ?? null);
+
   const { power } = useVotingPower(userAddress, proposalId);
   const votingPower = power?.total ?? 0;
 
@@ -332,6 +335,23 @@ export default function ProposalDetailClient({ proposalId }: { proposalId: strin
             <span className="font-mono text-vx-text">{truncateAddress(proposal.proposer)}</span>{" "}
             · Expires in {timeRemaining(proposal.deadline)}
           </p>
+        </div>
+
+        <div className="mb-6 space-y-2">
+          <button
+            type="button"
+            onClick={toggleSubscription}
+            disabled={!isConnected}
+            aria-pressed={isSubscribed}
+            className="px-3 py-1.5 text-xs font-semibold text-vx-sage border border-vx-sage/30 rounded-lg hover:bg-vx-sage/10 transition-colors disabled:opacity-50 focus-visible:outline focus-visible:outline-2"
+          >
+            {isSubscribed ? "Notifications on" : "Notify me"}
+          </button>
+          {reminders.map((r, i) => (
+            <p key={`${r.kind}-${i}`} role="status" className="text-xs text-vx-sage">
+              {r.message}
+            </p>
+          ))}
         </div>
 
         {proposal.status === "queued" && <TimelockBanner timelockEndsAt={proposal.timelockEndsAt} />}
