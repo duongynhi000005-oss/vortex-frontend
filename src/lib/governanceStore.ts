@@ -331,3 +331,108 @@ export function removeProposalComment(proposalId: string, commentId: string): vo
   if (!list) return;
   commentsStore[proposalId] = list.filter((c) => c.id !== commentId);
 }
+
+export type ArchiveProposal = {
+  id: string;
+  title: string;
+  summary: string;
+  category: string;
+  status: GovernanceProposalStatus;
+  createdAt: string;
+  tally: { for: number; against: number; abstain: number };
+  executed: boolean;
+};
+
+export type VoterVote = {
+  proposalId: string;
+  title: string;
+  choice: "for" | "against" | "abstain";
+  weight: string;
+  timestamp: string;
+};
+
+export type VoterHistoryResult = {
+  votes: VoterVote[];
+  totalVotes: number;
+  participationRate: number;
+  delegatedTo: string | null;
+};
+
+export type VoterHistoryOptions = { windowDays?: number; limit?: number; offset?: number };
+
+/** Small deterministic string hash (FNV-1a) used to derive stand-in data from an address. */
+function seedFromAddress(address: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < address.length; i++) {
+    h ^= address.charCodeAt(i);
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  return h >>> 0;
+}
+
+/**
+ * PENDING_BACKEND_ENDPOINTS: GET /api/governance/proposals (archive listing).
+ * Maps the seed proposals onto the shape the archive page renders.
+ */
+export async function listProposals(): Promise<ArchiveProposal[]> {
+  return getGovernanceProposals().map((p) => ({
+    id: p.id,
+    title: p.title,
+    summary: p.description,
+    category: p.category,
+    status: p.status,
+    createdAt: p.createdAt,
+    tally: { for: p.votesFor, against: p.votesAgainst, abstain: p.votesAbstain ?? 0 },
+    executed: p.status === "executed" || Boolean(p.executedAt),
+  }));
+}
+
+/**
+ * PENDING_BACKEND_ENDPOINTS: GET /api/governance/voters/:address/history.
+ * No per-voter vote log exists yet, so this derives a minimal deterministic
+ * mock keyed by address. The window is anchored to the newest seed proposal
+ * so results are stable regardless of the current date.
+ */
+export async function getVoterHistory(
+  address: string,
+  { windowDays = 90, limit = 20, offset = 0 }: VoterHistoryOptions = {},
+): Promise<VoterHistoryResult> {
+  const seed = seedFromAddress(address);
+  const proposals = getGovernanceProposals();
+  const choices = ["for", "against", "abstain"] as const;
+  const newest = Math.max(...proposals.map((p) => Date.parse(p.createdAt)));
+  const cutoff = newest - windowDays * 86_400_000;
+
+  const cast = proposals
+    .map((p, i) => ({ p, i }))
+    .filter(({ i }) => ((seed >>> i) & 1) === 1 || i === seed % proposals.length);
+  const votes: VoterVote[] = cast
+    .filter(({ p }) => Date.parse(p.createdAt) >= cutoff)
+    .map(({ p, i }) => ({
+      proposalId: p.id,
+      title: p.title,
+      choice: choices[(seed + i) % choices.length],
+      weight: String(((seed >>> 3) % 9000) + 1000),
+      timestamp: p.createdAt,
+    }))
+    .sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp));
+
+  const inWindow = proposals.filter((p) => Date.parse(p.createdAt) >= cutoff).length;
+  return {
+    votes: votes.slice(offset, offset + limit),
+    totalVotes: votes.length,
+    participationRate: inWindow === 0 ? 0 : votes.length / inWindow,
+    delegatedTo: seed % 4 === 0 ? proposals[0].proposer : null,
+  };
+}
+
+/** Thin namespace over the store functions, consumed by the archive and voter pages. */
+export const governanceStore = {
+  listProposals,
+  getVoterHistory,
+  getProposals: getGovernanceProposals,
+  getProposalById: getGovernanceProposalById,
+  getProposalComments,
+  addProposalComment,
+  removeProposalComment,
+};

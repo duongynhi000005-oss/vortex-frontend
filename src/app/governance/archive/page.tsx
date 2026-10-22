@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { governanceStore } from '@/lib/governanceStore';
-import { isValidStellarAddress } from '@/lib/stellarAddress';
+import { isValidStellarPublicKey } from '@/lib/stellarAddress';
 import { toCsv } from '@/lib/csv';
 
 const STATUSES = ['all', 'passed', 'rejected', 'expired', 'executed'] as const;
@@ -228,7 +228,7 @@ export default async function GovernanceArchivePage({
 }
 
 export function VoterHistory({ address, votes }: { address: string; votes: Array<{ proposalId: string; choice: string; weight: string; timestamp: string }> }) {
-  if (!isValidStellarAddress(address)) notFound();
+  if (!isValidStellarPublicKey(address)) notFound();
   const csv = toCsv(votes.map((v) => ({ proposalId: v.proposalId, choice: v.choice, weight: v.weight, timestamp: v.timestamp })));
   return (
     <section>

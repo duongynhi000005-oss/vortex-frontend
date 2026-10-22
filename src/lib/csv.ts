@@ -73,3 +73,11 @@ export function buildCsv(
   }
   return lines.join("\n");
 }
+
+/** Generic row-to-CSV helper; headers come from the first row's keys. */
+export function toCsv(rows: ReadonlyArray<Record<string, string | number | boolean | null | undefined>>): string {
+  if (rows.length === 0) return "";
+  const headers = Object.keys(rows[0]);
+  const lines = rows.map((row) => headers.map((key) => escapeCsv(String(row[key] ?? ""))).join(","));
+  return [headers.join(","), ...lines].join("\n");
+}
