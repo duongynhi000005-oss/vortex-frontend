@@ -1,9 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
 import { governanceStore } from '@/lib/governanceStore';
-import { isValidStellarAddress } from '@/lib/stellarAddress';
-import { toCsv } from '@/lib/csv';
 
 const STATUSES = ['all', 'passed', 'rejected', 'expired', 'executed'] as const;
 type Status = (typeof STATUSES)[number];
@@ -224,34 +221,5 @@ export default async function GovernanceArchivePage({
         </Link>
       </nav>
     </main>
-  );
-}
-
-export function VoterHistory({ address, votes }: { address: string; votes: Array<{ proposalId: string; choice: string; weight: string; timestamp: string }> }) {
-  if (!isValidStellarAddress(address)) notFound();
-  const csv = toCsv(votes.map((v) => ({ proposalId: v.proposalId, choice: v.choice, weight: v.weight, timestamp: v.timestamp })));
-  return (
-    <section>
-      <h2 className="text-lg font-semibold">Voter history</h2>
-      <a href={`data:text/csv;charset=utf-8,${encodeURIComponent(csv)}`} download={`voter-${address}.csv`} className="text-sm underline">
-        Export CSV
-      </a>
-      {votes.length === 0 ? (
-        <p className="mt-4 text-sm text-muted-foreground">No votes recorded for this address.</p>
-      ) : (
-        <ul className="mt-4 divide-y rounded border">
-          {votes.map((v) => (
-            <li key={`${v.proposalId}-${v.timestamp}`} className="flex flex-wrap items-center justify-between gap-2 p-3 text-sm">
-              <Link href={`/governance/${v.proposalId}`} className="underline-offset-2 hover:underline">
-                {v.proposalId}
-              </Link>
-              <span>{v.choice}</span>
-              <span>{v.weight}</span>
-              <time dateTime={v.timestamp}>{v.timestamp}</time>
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
   );
 }
