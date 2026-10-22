@@ -5,6 +5,7 @@ import { useTranslation } from "@/lib/i18n/I18nProvider";
 import { NOTIFIABLE_STATUSES, useNotificationPreferences } from "@/store/notificationPreferences";
 import {
   clearNotificationHistory,
+  dispatchNotification,
   getNotificationHistory,
   subscribeNotificationHistory,
   type NotificationPermissionState,
@@ -41,6 +42,19 @@ export function NotificationSettings() {
       return;
     }
     prefs.update({ channels: { ...prefs.channels, browser: enabled && permission === "granted" } });
+  };
+
+  // Fires a sample notification through the same dispatch pipeline as a real
+  // update, so users can verify their configured channels (and quiet hours).
+  const sendTestNotification = () => {
+    dispatchNotification({
+      id: `test-${Date.now()}`,
+      status: "pending",
+      title: t("notifications.test.title"),
+      body: t("notifications.test.body"),
+      href: "/",
+      timestamp: Date.now(),
+    });
   };
 
   return (
@@ -121,6 +135,14 @@ export function NotificationSettings() {
           ))}
         </select>
       </label>
+
+      <button
+        type="button"
+        onClick={sendTestNotification}
+        className="rounded-md border border-vx-border bg-vx-surface px-2 py-1 text-sm text-vx-text hover:bg-vx-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-vx-accent"
+      >
+        {t("notifications.test.button")}
+      </button>
 
       <section aria-label={t("notifications.inbox.title")} className="pt-2 border-t border-vx-border space-y-1">
         <div className="flex items-center justify-between">

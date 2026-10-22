@@ -118,3 +118,21 @@ export function dispatchNotification(prefs: NotificationPreferences, intent: Not
     }
   }
 }
+
+/**
+ * Build a clearly-labeled sample intent used by the "Send test notification"
+ * button. It flows through the same decideChannels/buildNotificationBody
+ * pipeline as a real update, so quiet hours and channel config are respected.
+ */
+export function buildTestNotificationIntent(): NotificationIntent {
+  return {
+    status: "test",
+    title: "Test: Vexa notification",
+    body: "Test: This is a sample notification to verify your notification settings.",
+    href: "/settings",
+  };
+}
+
+export function sendTestNotification(prefs: NotificationPreferences): void {
+  dispatchNotification(prefs, buildTestNotificationIntent());
+}
