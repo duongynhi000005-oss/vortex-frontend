@@ -11,6 +11,8 @@ export type WaveIssue = {
   contributor: string | null;
   /** Curated onboarding signal from `Good first issue: yes` in issues.md. */
   goodFirstIssue: boolean;
+  /** Optional GitHub handle (no leading `@`) from `Mentor: handle` in issues.md. */
+  mentor: string | null;
 };
 
 export type CategorySummary = {
@@ -100,6 +102,7 @@ export function parseIssuesMarkdown(markdown: string): WaveMetrics {
         let status: IssueStatus = "Open";
         let contributor: string | null = null;
         let goodFirstIssue = false;
+        let mentor: string | null = null;
 
         for (const part of detailsParts) {
           const [key, val] = part.split(":").map((s) => s?.trim());
@@ -124,6 +127,9 @@ export function parseIssuesMarkdown(markdown: string): WaveMetrics {
             }
           } else if (keyLower === "good first issue") {
             goodFirstIssue = val.toLowerCase() === "yes";
+          } else if (keyLower === "mentor") {
+            const handle = val.replace(/^@/, "");
+            if (handle && handle !== "None") mentor = handle;
           }
         }
 
@@ -136,6 +142,7 @@ export function parseIssuesMarkdown(markdown: string): WaveMetrics {
           status,
           contributor,
           goodFirstIssue,
+          mentor,
         });
       } catch {
         // Graceful error handling for unexpected lines

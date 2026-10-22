@@ -72,3 +72,19 @@ describe("ContributorsPageClient URL-persisted filters", () => {
     expect(screen.getByText("Solver Performance Graph")).toBeInTheDocument();
   });
 });
+
+describe("ContributorsPageClient mentor affordance", () => {
+  it("links to the mentor's GitHub profile only when a mentor is set", () => {
+    currentParams = new URLSearchParams();
+    const mentored = parseIssuesMarkdown(`
+## Solver Network
+- #28 Mentored Issue (Complexity: Trivial, Points: 50, Status: Open, Contributor: None, Good first issue: yes, Mentor: octocat)
+- #29 Plain Issue (Complexity: Trivial, Points: 50, Status: Open, Contributor: None, Good first issue: yes)
+`);
+    render(<ContributorsPageClient metrics={mentored} />);
+
+    const link = screen.getByRole("link", { name: "Ask @octocat about this one" });
+    expect(link).toHaveAttribute("href", "https://github.com/octocat");
+    expect(screen.getAllByRole("link", { name: /Ask @/ })).toHaveLength(1);
+  });
+});

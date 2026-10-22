@@ -364,6 +364,16 @@ export default function ContributorsPageClient({ metrics }: { metrics: WaveMetri
                           Good first issue
                         </span>
                       )}
+                      {issue.goodFirstIssue && issue.mentor && (
+                        <a
+                          href={`https://github.com/${encodeURIComponent(issue.mentor)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="ml-2 text-[10px] font-normal text-vx-sage underline focus:outline-none focus-visible:ring-2 focus-visible:ring-vx-sage"
+                        >
+                          Ask @{issue.mentor} about this one
+                        </a>
+                      )}
                     </td>
                     <td className="px-5 py-3.5 text-vx-muted">{issue.category}</td>
                     <td className="px-5 py-3.5">

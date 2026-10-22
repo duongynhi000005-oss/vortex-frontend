@@ -19,6 +19,22 @@ describe("parseIssuesMarkdown good-first-issue annotation", () => {
     expect(issues[0]).toMatchObject({ complexity: "Trivial", status: "Open", contributor: null });
   });
 
+  it("reads an optional `Mentor:` handle", () => {
+    const { issues } = parseIssuesMarkdown(`
+## Core Swap UI
+- #1 Mentored (Complexity: Trivial, Points: 50, Status: Open, Contributor: None, Good first issue: yes, Mentor: @octocat)
+- #2 Bare handle (Complexity: Trivial, Points: 50, Status: Open, Contributor: None, Good first issue: yes, Mentor: some-user)
+- #3 No mentor (Complexity: Trivial, Points: 50, Status: Open, Contributor: None, Good first issue: yes)
+- #4 Mentor none (Complexity: Trivial, Points: 50, Status: Open, Contributor: None, Mentor: None)
+`);
+    expect(issues.map((i) => [i.id, i.mentor])).toEqual([
+      [1, "octocat"],
+      [2, "some-user"],
+      [3, null],
+      [4, null],
+    ]);
+  });
+
   it("flags exactly the curated issues in issues.md, all of them open", () => {
     const markdown = readFileSync(path.resolve(__dirname, "../../issues.md"), "utf8");
     const { issues } = parseIssuesMarkdown(markdown);
