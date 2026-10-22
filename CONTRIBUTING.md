@@ -16,4 +16,4 @@ All contributors and maintainers are expected to adhere to our [Code of Conduct]
 
 ## Reporting Conduct Issues
 
-If you experience or witness unacceptable behavior, please contact the maintainers at `conduct@vortexprotocol.io` or `[TODO: maintainer email]`.
+If you experience or witness unacceptable behavior, please contact the maintainers at `conduct@vortexprotocol.io`, the single conduct-reporting channel (also listed in the [Code of Conduct](./CODE_OF_CONDUCT.md)).
