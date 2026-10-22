@@ -1,50 +1,16 @@
 'use client';
 
+import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useVotingPower } from '@/hooks/useVotingPower';
 import { useDelegation } from '@/hooks/useDelegation';
 import { sanitizeText } from '@/lib/textSafety';
 import { isSameStellarAddress, isValidStellarAddress } from '@/lib/stellarAddress';
+import { MOCK_DELEGATES, type DelegateProfile } from '@/lib/delegateDirectory';
 import { secureLogger } from '@/lib/secureLogging';
-
-interface DelegateProfile {
-  address: string;
-  name: string;
-  bio: string;
-  votingPower: number;
-  participationRate: number;
-  proposalsVoted: number;
-}
 
 type SortKey = 'votingPower' | 'participationRate' | 'proposalsVoted';
 type FlowStage = 'idle' | 'review' | 'simulate' | 'sign' | 'pending' | 'done';
-
-const MOCK_DELEGATES: DelegateProfile[] = [
-  {
-    address: 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF',
-    name: 'Aurora Governance',
-    bio: 'Active voter focused on protocol upgrades and treasury stewardship.',
-    votingPower: 1250000,
-    participationRate: 0.94,
-    proposalsVoted: 87,
-  },
-  {
-    address: 'GBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBWHF',
-    name: 'Nova Collective',
-    bio: 'Community-run delegate prioritising developer tooling and grants.',
-    votingPower: 860000,
-    participationRate: 0.81,
-    proposalsVoted: 64,
-  },
-  {
-    address: 'GCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCWHF',
-    name: 'Meridian Labs',
-    bio: 'Security-first delegate reviewing every proposal before voting.',
-    votingPower: 540000,
-    participationRate: 0.72,
-    proposalsVoted: 51,
-  },
-];
 
 function formatPower(value: number): string {
   return new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(value);
@@ -94,6 +60,13 @@ export default function DelegatesPage() {
     setStage('idle');
     setError(null);
     setConfirmedAddress('');
+  }, []);
+
+  // Deep link from the voter-history page: /governance/delegates?delegate=G...
+  useEffect(() => {
+    const addr = new URLSearchParams(window.location.search).get('delegate');
+    const match = MOCK_DELEGATES.find((d) => isSameStellarAddress(d.address, addr ?? ''));
+    if (match) setSelected(match);
   }, []);
 
   useEffect(() => {
@@ -234,6 +207,13 @@ export default function DelegatesPage() {
                   <p className="font-medium">{sanitizeText(d.name)}</p>
                   <p className="font-mono text-xs break-all text-muted-foreground">{d.address}</p>
                 </div>
+                <div className="flex items-center gap-2">
+                <Link
+                  href={`/governance/voter/${d.address}`}
+                  className="rounded-md border px-3 py-1.5 text-sm focus-visible:outline focus-visible:outline-2"
+                >
+                  View voting history
+                </Link>
                 <button
                   type="button"
                   onClick={() => {
@@ -245,6 +225,7 @@ export default function DelegatesPage() {
                 >
                   Delegate
                 </button>
+                </div>
               </div>
               <p className="mt-2 text-sm">{sanitizeText(d.bio)}</p>
               <dl className="mt-2 flex flex-wrap gap-4 text-xs text-muted-foreground">
