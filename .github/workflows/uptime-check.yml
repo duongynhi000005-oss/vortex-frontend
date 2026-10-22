@@ -15,6 +15,10 @@ on:
         required: false
         default: 'https://api.vortex-protocol.org'
 
+concurrency:
+  group: uptime-check
+  cancel-in-progress: false
+
 jobs:
   uptime-check:
     name: Synthetic Health Monitor
