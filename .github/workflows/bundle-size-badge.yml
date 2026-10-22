@@ -48,11 +48,11 @@ jobs:
           # Color thresholds derive from the limit enforced in CI (MAX_BUNDLE_SIZE_BYTES):
           # green below 80% of the limit, yellow up to the limit, red above it
           if (( $(echo "$BUNDLE_KB < $LIMIT_KB * 0.8" | bc -l) )); then
-            COLOR="brightgreen"
+            COLOR="#4c1"
           elif (( $(echo "$BUNDLE_KB <= $LIMIT_KB" | bc -l) )); then
-            COLOR="yellow"
+            COLOR="#dfb317"
           else
-            COLOR="red"
+            COLOR="#e05d44"
           fi
           
           # Create badge SVG
@@ -68,7 +68,7 @@ jobs:
             </clipPath>
             <g clip-path="url(#r)">
               <rect width="80" height="20" fill="#555"/>
-              <rect x="80" width="50" height="20" fill="#$COLOR"/>
+              <rect x="80" width="50" height="20" fill="$COLOR"/>
               <rect width="130" height="20" fill="url(#s)" opacity="0.1"/>
             </g>
             <g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" text-rendering="geometricPrecision" font-size="11">
