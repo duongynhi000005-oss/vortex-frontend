@@ -68,6 +68,13 @@ export const STORAGE_KEYS = {
     retentionMs: 90 * DAY,
     owner: "src/lib/knownAddresses.ts",
   },
+  proposalSubscriptions: {
+    key: "vortex:proposalSubscriptions",
+    purpose: "privacy.purpose.proposalSubscriptions",
+    sensitivity: "personal",
+    retentionMs: 90 * DAY,
+    owner: "src/hooks/useProposalSubscriptions.ts",
+  },
   columnVisibility: {
     key: "vortex:columns:",
     prefix: true,

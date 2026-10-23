@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { StrKey } from '@stellar/stellar-sdk';
 import { governanceStore } from '@/lib/governanceStore';
+import { MOCK_DELEGATES } from '@/lib/delegateDirectory';
 import { sanitizeText } from '@/lib/textSafety';
 import { AccountabilityBadge } from '@/components/AccountabilityBadge';
 
@@ -91,6 +92,14 @@ export default async function VoterHistoryPage({ params, searchParams }: VoterPa
           />
         </h1>
         <p className="mt-1 break-all font-mono text-sm text-muted-foreground">{address}</p>
+        {MOCK_DELEGATES.some((d) => d.address === address) && (
+          <Link
+            href={`/governance/delegates?delegate=${address}`}
+            className="mt-3 inline-block rounded-md border px-3 py-1.5 text-sm focus-visible:outline focus-visible:outline-2"
+          >
+            Delegate to this address
+          </Link>
+        )}
       </header>
 
       <section aria-label="Participation stats" className="mb-6 grid gap-4 sm:grid-cols-3">

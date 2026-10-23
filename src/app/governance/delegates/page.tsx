@@ -1,10 +1,12 @@
 'use client';
 
+import Link from 'next/link';
 import { Suspense, useEffect, useState } from 'react';
 import { useDelegation, type DelegateProfile } from '@/hooks/useDelegation';
 import { useQueryState } from '@/hooks/useQueryState';
 import { sanitizeText } from '@/lib/textSafety';
-import { isValidStellarPublicKey } from '@/lib/stellarAddress';
+import { isSameStellarAddress, isValidStellarPublicKey } from '@/lib/stellarAddress';
+import { MOCK_DELEGATES } from '@/lib/delegateDirectory';
 import { AccountabilityBadge } from '@/components/AccountabilityBadge';
 
 type SortKey = 'votingPower' | 'participationRate' | 'proposalsVoted';
@@ -46,6 +48,13 @@ function DelegatesPageContent() {
   const [manualAddress, setManualAddress] = useState('');
   const [confirmedAddress, setConfirmedAddress] = useState('');
   const [localError, setLocalError] = useState<string | null>(null);
+
+  // Deep link from the voter-history page: /governance/delegates?delegate=G...
+  useEffect(() => {
+    const addr = new URLSearchParams(window.location.search).get('delegate');
+    const match = MOCK_DELEGATES.find((d) => isSameStellarAddress(d.address, addr ?? ''));
+    if (match) startDelegate(match.address);
+  }, [startDelegate]);
 
   useEffect(() => {
     const q = params.get('q') ?? '';
@@ -211,6 +220,13 @@ function DelegatesPageContent() {
                   </p>
                   <p className="font-mono text-xs break-all text-muted-foreground">{d.address}</p>
                 </div>
+                <div className="flex items-center gap-2">
+                <Link
+                  href={`/governance/voter/${d.address}`}
+                  className="rounded-md border px-3 py-1.5 text-sm focus-visible:outline focus-visible:outline-2"
+                >
+                  View voting history
+                </Link>
                 <button
                   type="button"
                   onClick={() => handleSelect(d)}
@@ -218,6 +234,7 @@ function DelegatesPageContent() {
                 >
                   Delegate
                 </button>
+                </div>
               </div>
               <p className="mt-2 text-sm">{sanitizeText(d.bio)}</p>
               <dl className="mt-2 flex flex-wrap gap-4 text-xs text-muted-foreground">

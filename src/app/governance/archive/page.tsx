@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { bucketProposalsByMonth, getGovernanceProposals } from '@/lib/governanceStore';
 import { BarChart } from '@/components/charts';
+import { ProposalStatusChip } from '@/components/ProposalStatusChip';
 import {
   ARCHIVE_STATUSES as STATUSES,
   filterArchiveProposals,
@@ -148,6 +149,26 @@ export default async function GovernanceArchivePage({
         </p>
       )}
 
+      {rows.length >= 2 && (
+        <form action="/governance/compare" method="get" className="mb-4 flex flex-wrap items-end gap-3 text-sm">
+          {(['a', 'b'] as const).map((name, i) => (
+            <label key={name} className="flex flex-col gap-1">
+              Compare {i === 0 ? 'first' : 'second'} proposal
+              <select name={name} defaultValue={rows[i]?.id} className="rounded border px-2 py-1">
+                {rows.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.id}: {p.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ))}
+          <button type="submit" className="rounded border px-3 py-2 text-sm">
+            Compare
+          </button>
+        </form>
+      )}
+
       {rows.length === 0 ? (
         <p className="rounded border border-dashed p-6 text-center text-sm text-muted-foreground">
           No proposals match the selected filters.
@@ -160,7 +181,7 @@ export default async function GovernanceArchivePage({
                 <Link href={`/governance/${p.id}`} className="font-medium underline-offset-2 hover:underline">
                   {p.title}
                 </Link>
-                <span className="rounded bg-muted px-2 py-0.5 text-xs uppercase">{p.status}</span>
+                <ProposalStatusChip status={p.status} />
               </div>
               <dl className="mt-2 grid grid-cols-2 gap-2 text-xs text-muted-foreground sm:grid-cols-4">
                 <div>

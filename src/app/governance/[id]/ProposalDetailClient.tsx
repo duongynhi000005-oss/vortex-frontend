@@ -14,6 +14,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Nav } from "@/components/Nav";
 import { ConnectWalletButton } from "@/components/ConnectWalletButton";
+import { ProposalStatusChip } from "@/components/ProposalStatusChip";
+import { TimelockBanner } from "@/components/TimelockBanner";
+import { useProposalSubscriptions } from "@/hooks/useProposalSubscriptions";
 import { VotePanel } from "@/components/VotePanel";
 import { VotingPowerPanel } from "@/components/VotingPowerPanel";
 import { QuorumProgress } from "@/components/QuorumProgress";
@@ -316,6 +319,8 @@ export default function ProposalDetailClient({ proposalId }: { proposalId: strin
     }
   };
 
+  const { isSubscribed, toggle: toggleSubscription, reminders } = useProposalSubscriptions(proposal, userAddress ?? null);
+
   const { power } = useVotingPower(userAddress, proposalId);
   const votingPower = power?.total ?? 0;
 
@@ -462,17 +467,7 @@ export default function ProposalDetailClient({ proposalId }: { proposalId: strin
             <span className="text-xs px-2 py-0.5 rounded-full bg-vx-surface text-vx-muted border border-vx-border">
               {proposal.category}
             </span>
-            <span
-              className={`text-xs px-2.5 py-0.5 rounded-full font-medium w-fit ${
-                proposal.status === "active"
-                  ? "bg-vx-sage-bg text-vx-sage border border-vx-sage/30"
-                  : proposal.status === "passed"
-                  ? "bg-blue-500/10 text-blue-400 border border-blue-500/30"
-                  : "bg-red-500/10 text-red-400 border border-red-500/30"
-              }`}
-            >
-              {proposal.status}
-            </span>
+            <ProposalStatusChip status={proposal.status} />
           </div>
           <h1 className="text-2xl sm:text-3xl font-bold text-vx-text mb-3">{proposal.title}</h1>
           <p className="text-xs text-vx-muted">
@@ -481,6 +476,31 @@ export default function ProposalDetailClient({ proposalId }: { proposalId: strin
             · Expires in {timeRemaining(proposal.deadline)}
           </p>
         </div>
+
+        <div className="mb-6 space-y-2">
+          <button
+            type="button"
+            onClick={toggleSubscription}
+            disabled={!isConnected}
+            aria-pressed={isSubscribed}
+            className="px-3 py-1.5 text-xs font-semibold text-vx-sage border border-vx-sage/30 rounded-lg hover:bg-vx-sage/10 transition-colors disabled:opacity-50 focus-visible:outline focus-visible:outline-2"
+          >
+            {isSubscribed ? "Notifications on" : "Notify me"}
+          </button>
+          <Link
+            href={`/governance/compare?a=${encodeURIComponent(proposal.id)}`}
+            className="ml-2 px-3 py-1.5 text-xs font-semibold text-vx-sage border border-vx-sage/30 rounded-lg hover:bg-vx-sage/10 transition-colors inline-block focus-visible:outline focus-visible:outline-2"
+          >
+            Compare
+          </Link>
+          {reminders.map((r, i) => (
+            <p key={`${r.kind}-${i}`} role="status" className="text-xs text-vx-sage">
+              {r.message}
+            </p>
+          ))}
+        </div>
+
+        {proposal.status === "queued" && <TimelockBanner timelockEndsAt={proposal.timelockEndsAt} />}
 
         <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
           {/* ── Main column ──────────────────────────────────────────────── */}

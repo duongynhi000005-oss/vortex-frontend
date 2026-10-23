@@ -29,6 +29,17 @@ export function ProposalImpactPreview({ proposal }: { proposal: GovernancePropos
   );
 }
 
+export function BondImpact({ currentValue, proposedValue }: { currentValue: number; proposedValue: number }) {
+  const handler = getParameterImpactHandler("minSolverBondUsd");
+  if (!handler) return null;
+  return (
+    <ImpactSummary
+      change={{ parameter: "minSolverBondUsd", currentValue, proposedValue }}
+      handler={handler}
+    />
+  );
+}
+
 function ImpactSummary({ change, handler }: { change: ParameterChange; handler: ParameterImpactHandler }) {
   const { t } = useTranslation();
   const { solvers, isLoading, error } = useSolvers();
