@@ -28,6 +28,7 @@
     "build:storybook": "storybook build --quiet",
     "test:storybook": "test-storybook --url http://127.0.0.1:6006",
     "check:actionlint": "actionlint",
+    "doctor": "node scripts/doctor.mjs",
     "prepare": "husky"
   },
   "dependencies": {

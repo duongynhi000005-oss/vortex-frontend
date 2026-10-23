@@ -78,8 +78,11 @@ Then proceed with setup:
 ```bash
 npm install
 cp .env.example .env.local
+npm run doctor # checks Node, env, lockfile, hooks, Playwright, ports and backend; prints a fix for each problem
 npm run dev    # http://localhost:3000
 ```
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for the 10-minute quick start and the common-failures table.
 
 ### Required Environment Variables
 
