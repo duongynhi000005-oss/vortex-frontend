@@ -1,4 +1,5 @@
 // Slippage / intent-deadline helpers shared by SwapCard and SwapSettings (#418).
+import type { QuoteRisk } from "@/lib/quoteRisk";
 
 export const DEFAULT_SLIPPAGE_PCT = 0.5;
 export const SLIPPAGE_PRESETS = [0.1, 0.5, 1] as const;
@@ -21,6 +22,17 @@ export function parseSlippageInput(raw: string): number {
   const cleaned = raw.trim().replace(/%$/, "").trim().replace(",", ".");
   if (!/^\d*\.?\d+$|^\d+\.$/.test(cleaned)) return NaN;
   return Number(cleaned);
+}
+
+/**
+ * Suggests the next preset above `currentPct` for a risky quote. Returns null
+ * for low-risk quotes, when already at the maximum, or when no higher preset
+ * exists. Never suggests lowering slippage.
+ */
+export function suggestSlippageForRisk(level: QuoteRisk["level"], currentPct: number): number | null {
+  if (level !== "warning" && level !== "severe") return null;
+  if (!Number.isFinite(currentPct) || currentPct >= MAX_SLIPPAGE_PCT) return null;
+  return SLIPPAGE_PRESETS.find(preset => preset > currentPct) ?? null;
 }
 
 export function getSlippageStatus(pct: number): SlippageStatus {
