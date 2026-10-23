@@ -136,6 +136,16 @@ const securityHeaders = [
 
 const nextConfig = {
   reactStrictMode: true,
+  webpack(config, { dev, isServer }) {
+    // Error-monitor builds emit client source maps with no `sourceMappingURL`
+    // comment, so browsers never fetch them. The deploy workflow uploads them
+    // keyed by release and deletes them before the artifact is published
+    // (see docs/error-monitoring.md). Plain builds stay map-free.
+    if (!dev && !isServer && process.env.ERROR_MONITOR_SOURCE_MAPS === "true") {
+      config.devtool = "hidden-source-map";
+    }
+    return config;
+  },
   images: {
     // Locked-down allowlist: only GitHub avatars, only over HTTPS, only the
     // /<login> path shape produced by avatarUrlFor() in src/lib/contributors.ts.

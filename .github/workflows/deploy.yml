@@ -36,9 +36,30 @@ jobs:
           NEXT_PUBLIC_NETWORK: ${{ secrets.NEXT_PUBLIC_NETWORK }}
           NEXT_PUBLIC_SETTLEMENT_CONTRACT: ${{ secrets.NEXT_PUBLIC_SETTLEMENT_CONTRACT }}
           NEXT_PUBLIC_SOLVER_REGISTRY_CONTRACT: ${{ secrets.NEXT_PUBLIC_SOLVER_REGISTRY_CONTRACT }}
+          ERROR_MONITOR_SOURCE_MAPS: ${{ secrets.SENTRY_AUTH_TOKEN != '' && 'true' || 'false' }}
         run: |
           npm run build
           echo "build-id=$(date +%s)" >> $GITHUB_OUTPUT
+
+      - name: Upload source maps to error monitor
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
+          RELEASE: ${{ github.sha }}
+        run: |
+          if [ -z "$SENTRY_AUTH_TOKEN" ] || [ -z "$SENTRY_ORG" ] || [ -z "$SENTRY_PROJECT" ]; then
+            echo "::notice::Error monitor not configured. Skipping source map upload."
+          else
+            npx --yes @sentry/cli@2 releases new "$RELEASE"
+            npx --yes @sentry/cli@2 releases files "$RELEASE" upload-sourcemaps .next/static \
+              --url-prefix '~/_next/static' --rewrite --validate
+            npx --yes @sentry/cli@2 releases finalize "$RELEASE"
+          fi
+
+          # Maps must never be publicly served: strip them from the artifact
+          # whether or not they were uploaded.
+          find .next -name '*.map' -delete
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v7
