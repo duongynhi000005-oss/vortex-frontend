@@ -100,9 +100,11 @@ jobs:
               body: report,
             });
       - run: npm ci
+      - run: npm run check:actionlint
       - run: npm run check:manifest
       - run: npm run check:env
       - run: npm run check:i18n
+      - run: npm run check:editorconfig
       - run: npm run check:orphan-tests
       - run: npm run check:docs
       - run: npm run check:dead-code
@@ -328,15 +330,6 @@ jobs:
             ${{ runner.os }}-playwright-
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - name: Generate CycloneDX SBOM (Issue #480)
-        run: node scripts/generate-sbom.mjs sbom.json
-      - name: Upload SBOM artifact
-        if: github.ref == 'refs/heads/main'
-        uses: actions/upload-artifact@v4
-        with:
-          name: sbom
-          path: sbom.json
-          retention-days: 90
 
       - name: Build Storybook
         run: npm run build:storybook
@@ -411,9 +404,9 @@ jobs:
           PR_BODY: ${{ github.event.pull_request.body }}
           GITHUB_ACTOR: ${{ github.actor }}
       - name: Lint lockfile
-        run: npm ls --all > /dev/null
+        run: node scripts/lint-lockfile.mjs
       - name: Generate SBOM
-        run: npx --yes @cyclonedx/cyclonedx-npm --output-file sbom.json
+        run: node scripts/generate-sbom.mjs sbom.json
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
