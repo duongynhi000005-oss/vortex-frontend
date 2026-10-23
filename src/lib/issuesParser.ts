@@ -161,6 +161,18 @@ function parseEntry(body: string, category: string): EntryResult {
   };
 }
 
+/**
+ * Returns all completed issues for a specific contributor.
+ */
+export function getContributorCompletedIssues(
+  issues: WaveIssue[],
+  contributor: string
+): WaveIssue[] {
+  return issues.filter(
+    (issue) => issue.status === "Completed" && issue.contributor === contributor
+  );
+}
+
 export function parseIssuesMarkdown(markdown: string): WaveMetrics {
   const lines = markdown.split(/\r?\n/);
   let currentCategory = "General";

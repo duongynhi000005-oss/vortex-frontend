@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Nav } from "@/components/Nav";
-import type { ComplexityTier, IssueStatus, WaveMetrics } from "@/lib/issuesParser";
+import { type ComplexityTier, type IssueStatus, type WaveMetrics, getContributorCompletedIssues } from "@/lib/issuesParser";
 import { useTranslation } from "@/lib/i18n/I18nProvider";
 import type { MessageKey } from "@/lib/i18n";
 
@@ -54,6 +54,7 @@ export default function ContributorsPageClient({ metrics }: { metrics: WaveMetri
   const [searchQuery, setSearchQuery] = useState<string>(() => searchParams?.get("q") ?? "");
   const [goodFirstOnly, setGoodFirstOnly] = useState(() => searchParams?.get("goodFirstOnly") === "1");
   const [prLinks, setPrLinks] = useState<Record<number, string>>({});
+  const [expandedContributor, setExpandedContributor] = useState<string | null>(null);
 
   // Fail soft: if the lookup is unavailable, issues render without a PR link.
   useEffect(() => {
@@ -253,22 +254,140 @@ export default function ContributorsPageClient({ metrics }: { metrics: WaveMetri
                 </tr>
               </thead>
               <tbody className="divide-y divide-vx-line">
-                {metrics.leaderboard.map((c, idx) => (
-                  <tr key={c.contributor} className="hover:bg-vx-surface/30 transition-colors">
-                    <td className="px-5 py-3.5 font-mono font-bold text-vx-dim">
-                      #{String(idx + 1).padStart(2, "0")}
-                    </td>
-                    <td className="px-5 py-3.5 font-mono font-semibold text-vx-text">
-                      {truncateAddress(c.contributor)}
-                    </td>
-                    <td className="px-5 py-3.5 text-center text-vx-muted font-medium">
-                      {c.completedCount}
-                    </td>
-                    <td className="px-5 py-3.5 text-right font-mono font-bold text-vx-sage">
-                      {t("wave.points.short", { count: c.pointsEarned.toLocaleString() })}
-                    </td>
-                  </tr>
-                ))}
+                {metrics.leaderboard.map((c, idx) => {
+                  const isExpanded = expandedContributor === c.contributor;
+                  const completedIssues = isExpanded
+                    ? getContributorCompletedIssues(metrics.issues, c.contributor)
+                    : [];
+                  return (
+                    <Fragment key={c.contributor}>
+                      <tr
+                        onClick={() => setExpandedContributor(isExpanded ? null : c.contributor)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            setExpandedContributor(isExpanded ? null : c.contributor);
+                          }
+                        }}
+                        tabIndex={0}
+                        role="button"
+                        aria-expanded={isExpanded}
+                        aria-label={t(
+                          isExpanded ? "wave.contributor.hideIssues" : "wave.contributor.viewIssues",
+                          { address: truncateAddress(c.contributor) }
+                        )}
+                        className={`cursor-pointer transition-colors ${
+                          isExpanded ? "bg-vx-surface/50 font-medium" : "hover:bg-vx-surface/30"
+                        }`}
+                      >
+                        <td className="px-5 py-3.5 font-mono font-bold text-vx-dim">
+                          #{String(idx + 1).padStart(2, "0")}
+                        </td>
+                        <td className="px-5 py-3.5 font-mono font-semibold text-vx-text">
+                          <div className="flex items-center gap-2">
+                            <span>{truncateAddress(c.contributor)}</span>
+                            <span className="text-[10px] text-vx-muted">
+                              {isExpanded ? "▲" : "▼"}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-5 py-3.5 text-center text-vx-muted font-medium">
+                          {c.completedCount}
+                        </td>
+                        <td className="px-5 py-3.5 text-right font-mono font-bold text-vx-sage">
+                          {t("wave.points.short", { count: c.pointsEarned.toLocaleString() })}
+                        </td>
+                      </tr>
+                      {isExpanded && (
+                        <tr className="bg-vx-surface/20 border-b border-vx-border/60">
+                          <td colSpan={4} className="p-5">
+                            <div className="space-y-4 text-xs">
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-vx-border/40 pb-3">
+                                <div>
+                                  <h3 className="font-semibold text-vx-text text-sm">
+                                    {t("wave.contributor.detailTitle", {
+                                      address: truncateAddress(c.contributor),
+                                    })}
+                                  </h3>
+                                  <span className="font-mono text-vx-muted text-[11px] break-all">
+                                    {c.contributor}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <span className="px-2.5 py-1 rounded-full border border-vx-border bg-vx-surface/40 text-[11px] font-medium text-vx-muted">
+                                    {t("wave.contributor.completedCount", { count: c.completedCount })}
+                                  </span>
+                                  <span className="px-2.5 py-1 rounded-full border border-vx-sage/30 bg-vx-sage/10 text-[11px] font-bold text-vx-sage">
+                                    {t("wave.contributor.totalPointsEarned", {
+                                      count: c.pointsEarned.toLocaleString(),
+                                    })}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {completedIssues.length === 0 ? (
+                                <p className="text-vx-muted py-2">{t("wave.contributor.noIssues")}</p>
+                              ) : (
+                                <div className="divide-y divide-vx-border/40 border border-vx-border/60 rounded-lg overflow-hidden bg-vx-surface/30">
+                                  {completedIssues.map((issue) => (
+                                    <div
+                                      key={issue.id}
+                                      className="p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 hover:bg-vx-surface/40 transition-colors"
+                                    >
+                                      <div className="flex items-center gap-2.5 min-w-0">
+                                        <span className="font-mono text-vx-dim font-bold shrink-0">
+                                          #{issue.id}
+                                        </span>
+                                        <span className="text-vx-text font-medium truncate">
+                                          {issue.title}
+                                        </span>
+                                        <span className="text-[10px] text-vx-muted px-2 py-0.5 rounded bg-vx-surface border border-vx-border shrink-0">
+                                          {issue.category}
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center gap-3 shrink-0 self-end sm:self-auto">
+                                        <span
+                                          className={`text-[11px] font-semibold ${
+                                            issue.complexity === "High"
+                                              ? "text-vx-amber"
+                                              : issue.complexity === "Medium"
+                                              ? "text-vx-sage"
+                                              : "text-blue-400"
+                                          }`}
+                                        >
+                                          {t(TIER_NAME_KEY[issue.complexity])}
+                                        </span>
+                                        <span className="font-mono font-bold text-vx-sage text-xs">
+                                          {t("wave.points.short", {
+                                            count: issue.points.toLocaleString(),
+                                          })}
+                                        </span>
+                                        {prLinks[issue.id] && (
+                                          <a
+                                            href={prLinks[issue.id]}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-vx-muted hover:text-vx-sage text-[11px] underline"
+                                          >
+                                            {t("wave.issues.viewPr", {
+                                              number:
+                                                prLinks[issue.id]?.match(/\/pull\/(\d+)/)?.[1] ??
+                                                issue.id,
+                                            })}
+                                          </a>
+                                        )}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>

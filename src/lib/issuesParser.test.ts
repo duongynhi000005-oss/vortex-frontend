@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { parseIssuesMarkdown } from "./issuesParser";
+import { getContributorCompletedIssues, parseIssuesMarkdown } from "./issuesParser";
 
 describe("parseIssuesMarkdown good-first-issue annotation", () => {
   it("reads `Good first issue: yes` and defaults to false", () => {
@@ -47,5 +47,27 @@ describe("parseIssuesMarkdown good-first-issue annotation", () => {
     const ids = issues.map((i) => i.id);
     expect(new Set(ids).size).toBe(ids.length);
     expect(issues.some((i) => i.category === "Good First Issues")).toBe(false);
+  });
+});
+
+describe("getContributorCompletedIssues", () => {
+  it("returns only completed issues for the specified contributor", () => {
+    const { issues } = parseIssuesMarkdown(`
+## Core Swap UI
+- #1 Base Component (Complexity: High, Points: 200, Status: Completed, Contributor: GABC)
+- #2 Token Selector (Complexity: Medium, Points: 150, Status: Completed, Contributor: GDEF)
+- #3 Slippage Panel (Complexity: Trivial, Points: 50, Status: In Progress, Contributor: GABC)
+- #4 Real-time Rates (Complexity: High, Points: 200, Status: Completed, Contributor: GABC)
+`);
+
+    const gabcCompleted = getContributorCompletedIssues(issues, "GABC");
+    expect(gabcCompleted.map((i) => i.id)).toEqual([1, 4]);
+    expect(gabcCompleted.every((i) => i.contributor === "GABC" && i.status === "Completed")).toBe(true);
+
+    const gdefCompleted = getContributorCompletedIssues(issues, "GDEF");
+    expect(gdefCompleted.map((i) => i.id)).toEqual([2]);
+
+    const unknown = getContributorCompletedIssues(issues, "GUNASSIGNED");
+    expect(unknown).toEqual([]);
   });
 });
