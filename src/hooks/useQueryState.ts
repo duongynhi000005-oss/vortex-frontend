@@ -8,9 +8,17 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
  * the default `replace` does not.
  */
 export function useQueryState() {
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
+  let router: ReturnType<typeof useRouter> | null = null;
+  let pathname = typeof window !== "undefined" ? window.location.pathname : "/";
+  let searchParams: URLSearchParams;
+  try {
+    router = useRouter();
+    pathname = usePathname() ?? pathname;
+    const sp = useSearchParams();
+    searchParams = sp ?? new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
+  } catch {
+    searchParams = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
+  }
 
   const update = useCallback(
     (updates: Record<string, string | null>, mode: "replace" | "push" = "replace") => {
@@ -21,8 +29,13 @@ export function useQueryState() {
       }
       const qs = next.toString();
       const href = qs ? `${pathname}?${qs}` : pathname;
-      if (mode === "push") router.push(href, { scroll: false });
-      else router.replace(href, { scroll: false });
+      if (router) {
+        if (mode === "push") router.push(href, { scroll: false });
+        else router.replace(href, { scroll: false });
+      } else if (typeof window !== "undefined") {
+        if (mode === "push") window.history.pushState(null, "", href);
+        else window.history.replaceState(null, "", href);
+      }
     },
     [router, pathname, searchParams],
   );
