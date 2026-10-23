@@ -1,0 +1,88 @@
+name: Dependabot auto-merge
+
+# Security model (see docs/dependency-policy.md):
+# - pull_request_target runs with a write-scoped token and secrets, so this workflow
+#   NEVER checks out or executes code from the pull request.
+# - PR metadata is read only through dependabot/fetch-metadata.
+# - The policy script is downloaded from the BASE commit via the API, not from the PR.
+# - Only Dependabot-authored PRs proceed.
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  classify:
+    name: Classify Dependabot update
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Fetch Dependabot metadata
+        id: metadata
+        uses: dependabot/fetch-metadata@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Classify update with base-branch policy
+        id: classify
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          UPDATED: ${{ steps.metadata.outputs.updated-dependencies-json }}
+        run: |
+          set -euo pipefail
+          policy="$RUNNER_TEMP/dependency-policy.mjs"
+          gh api "repos/${REPO}/contents/scripts/dependency-policy.mjs?ref=${BASE_SHA}" --jq .content \
+            | base64 --decode > "$policy"
+          decision=$(printf '%s' "$UPDATED" | node "$policy" | jq -r .decision)
+          echo "decision=${decision}" >> "$GITHUB_OUTPUT"
+          echo "Policy decision: ${decision}"
+
+      - name: Arm auto-merge for low-risk updates
+        if: steps.classify.outputs.decision == 'auto'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: gh pr merge --auto --squash "$PR_URL"
+
+      - name: Require human review
+        if: steps.classify.outputs.decision != 'auto'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          UPDATED: ${{ steps.metadata.outputs.updated-dependencies-json }}
+          DECISION: ${{ steps.classify.outputs.decision }}
+        run: |
+          set -euo pipefail
+          # Drop any auto-merge armed by an earlier run, in case the update is now reclassified.
+          gh pr merge --disable-auto "$PR_URL" || true
+          gh pr edit "$PR_URL" --add-label "dependencies:review-required" || true
+
+          {
+            echo "## Dependency review checklist"
+            echo
+            echo "Policy decision: **${DECISION}**. This update is not auto-merged; a maintainer must approve it."
+            echo
+            echo "| Package | From | To | Type | Changelog / release notes |"
+            echo "| --- | --- | --- | --- | --- |"
+            printf '%s' "$UPDATED" | jq -r '.[] | "| `\(.["dependency-name"])` | \(.["previous-version"]) | \(.["new-version"]) | \(.["dependency-type"]) | https://www.npmjs.com/package/\(.["dependency-name"])/v/\(.["new-version"]) |"'
+            echo
+            echo "- [ ] Changelog / release notes reviewed (links above)"
+            echo "- [ ] \`package-lock.json\` diff reviewed in **Files changed**"
+            echo "- [ ] Install-script changes checked (\`scripts\` in the package.json diff, and \`preinstall\`/\`install\`/\`postinstall\` in the new package)"
+            echo "- [ ] Provenance checked on the npm package page (or \`npm audit signatures\` locally)"
+            echo "- [ ] Peer dependency changes checked, if any"
+            echo "- [ ] Wallet / signing behaviour reviewed for \`@stellar/*\`, \`next\`, \`react\` updates"
+          } > "$RUNNER_TEMP/checklist.md"
+
+          gh pr comment "$PR_URL" --body-file "$RUNNER_TEMP/checklist.md"

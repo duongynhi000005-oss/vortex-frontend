@@ -1,0 +1,63 @@
+name: Weekly npm audit summary
+
+# Keeps one open "dependency-audit" issue up to date with the current npm audit results.
+# Thresholds and response times are defined in docs/dependency-policy.md.
+on:
+  schedule:
+    # Mondays 07:00 UTC, after Dependabot's weekly batch
+    - cron: "0 7 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    name: npm audit summary
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: "npm"
+      - name: Run npm audit
+        run: npm audit --json > audit.json || true
+      - name: Create or update summary issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          # npm audit exits non-zero when vulnerabilities exist; the JSON must still parse.
+          jq -e '.metadata.vulnerabilities' audit.json > /dev/null
+
+          {
+            echo "# Weekly npm audit summary"
+            echo
+            echo "Generated $(date -u +%Y-%m-%dT%H:%MZ) by the \`npm-audit-summary\` workflow."
+            echo
+            jq -r '.metadata.vulnerabilities | "| Severity | Count |\n| --- | --- |\n| critical | \(.critical) |\n| high | \(.high) |\n| moderate | \(.moderate) |\n| low | \(.low) |\n| total | \(.total) |"' audit.json
+            echo
+            echo "## Critical and high advisories"
+            echo
+            jq -r '.vulnerabilities | to_entries[] | select(.value.severity == "critical" or .value.severity == "high") | "- `\(.key)` (\(.value.severity)): \([.value.via[] | select(type == "object") | .title] | join("; "))"' audit.json
+            echo
+            echo "Remediation follows the SLAs in docs/dependency-policy.md. Run \`npm audit fix\` only in a reviewed branch."
+          } > summary.md
+
+          gh label create dependency-audit --color B60205 --description "Weekly npm audit summary" --force
+          existing=$(gh issue list --repo "$REPO" --label dependency-audit --state open --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            gh issue edit "$existing" --repo "$REPO" --body-file summary.md
+          else
+            gh issue create --repo "$REPO" --title "Weekly npm audit summary" --label dependency-audit --body-file summary.md
+          fi

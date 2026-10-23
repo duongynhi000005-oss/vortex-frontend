@@ -1,33 +1,84 @@
 version: 2
+# Dependency update policy. Rationale, SLAs and the auto-merge rules live in
+# docs/dependency-policy.md — keep the two in sync when changing groups or ignores.
 updates:
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
       interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+    commit-message:
+      prefix: "chore(deps)"
+    # Order matters: Dependabot assigns each dependency to the first matching group.
     groups:
-      minor-and-patch:
-        update-types:
-          - "minor"
-          - "patch"
-      major-updates:
-        update-types:
-          - "major"
+      # Wallet / chain SDKs: always reviewed by a human (see classifyUpdate).
+      stellar:
         patterns:
-          - "@stellar/freighter-api"
-          - "@stellar/stellar-sdk"
+          - "@stellar/*"
+      # Framework core: always reviewed by a human.
+      next-react:
+        patterns:
           - "next"
           - "react"
           - "react-dom"
+          - "@types/react"
+          - "@types/react-dom"
+          - "eslint-config-next"
+      # Test tooling (dev-only): minor and patch bumps are auto-merge candidates.
+      testing:
+        dependency-type: "development"
+        patterns:
+          - "vitest"
+          - "@vitest/*"
+          - "jsdom"
+          - "fast-check"
+          - "@testing-library/*"
+          - "@playwright/test"
+        update-types:
+          - "minor"
+          - "patch"
+      # Remaining dev tooling (lint, build, storybook, git hooks): minor and patch.
+      dev-tooling:
+        dependency-type: "development"
+        update-types:
+          - "minor"
+          - "patch"
+      # Remaining production dependencies: minor and patch, reviewed by a human.
+      production-minor-and-patch:
+        dependency-type: "production"
+        update-types:
+          - "minor"
+          - "patch"
+      # Majors are never grouped with anything else, so each one gets its own PR.
+    ignore:
+      # Node types must track the runtime pinned in .nvmrc; bump them deliberately.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+      # Major upgrades of the Stellar SDKs need a manual compatibility pass with
+      # the contract ABI and the wallet adapters; handle them as planned work.
+      - dependency-name: "@stellar/stellar-sdk"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@stellar/freighter-api"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "UTC"
+    labels:
+      - "dependencies"
+      - "ci"
+    commit-message:
+      prefix: "ci(deps)"
     groups:
-      minor-and-patch:
-        update-types:
-          - "minor"
-          - "patch"
-      major-updates:
-        update-types:
-          - "major"
+      github-actions:
+        patterns:
+          - "*"

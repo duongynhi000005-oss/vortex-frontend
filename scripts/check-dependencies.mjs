@@ -6,6 +6,9 @@
  * This script checks for new or updated dependencies in package.json and ensures
  * they are justified in the PR description. This is a lightweight, human-review-forcing
  * check to detect potential typosquats, unexpected updates, or supply-chain compromises.
+ *
+ * Usage: node scripts/check-dependencies.mjs [--report <path.json>]
+ *   --report writes a machine-readable summary of the dependency changes (see docs/dependency-policy.md).
  */
 
 import { execSync } from "child_process";
@@ -79,14 +82,34 @@ function isAutomatedPR() {
   return actor.includes("dependabot") || actor.includes("renovate");
 }
 
+// Writes a machine-readable summary when invoked as `--report <path>` (CI uploads it as an artifact).
+function writeReport(report) {
+  const reportIndex = process.argv.indexOf("--report");
+  if (reportIndex === -1) return;
+  const reportPath = process.argv[reportIndex + 1];
+  if (!reportPath) {
+    throw new Error("--report requires a file path");
+  }
+  fs.writeFileSync(reportPath, JSON.stringify(report, null, 2) + "\n");
+}
+
 function main() {
   console.log("🔍 Checking for dependency changes...");
 
   const changes = getDependencyChanges();
   const hasChanges = changes.dependencies.length > 0 || changes.devDependencies.length > 0;
+  const automated = isAutomatedPR();
+  const report = {
+    dependencies: changes.dependencies,
+    devDependencies: changes.devDependencies,
+    automated,
+    securitySensitive: [],
+    status: "no-changes",
+  };
 
   if (!hasChanges) {
     console.log("✅ No dependency changes detected.");
+    writeReport(report);
     process.exit(0);
   }
 
@@ -99,8 +122,10 @@ function main() {
   }
 
   // If this is an automated PR (Dependabot), only warn
-  if (isAutomatedPR()) {
+  if (automated) {
     console.log("\n⚠️  Automated PR detected (Dependabot/Renovate). Dependency updates are advisory-only.");
+    report.status = "advisory";
+    writeReport(report);
     process.exit(0);
   }
 
@@ -109,6 +134,7 @@ function main() {
   const addedSecurityPackages = changes.dependencies.filter((p) =>
     securitySensitivePackages.includes(p)
   );
+  report.securitySensitive = addedSecurityPackages;
 
   if (addedSecurityPackages.length > 0) {
     console.log(
@@ -125,16 +151,21 @@ function main() {
       );
       console.error(`   Add this checkbox to your PR description to acknowledge the change:`);
       console.error(`   ${DEPENDENCY_MARKER}`);
+      report.status = "failed";
+      writeReport(report);
       process.exit(1);
     }
 
     console.log("✅ Security-sensitive package changes are documented.");
+    report.status = "documented";
   } else {
     console.log(
       "\n✅ No security-sensitive package changes detected (advisory check complete)."
     );
+    report.status = "passed";
   }
 
+  writeReport(report);
   process.exit(0);
 }
 

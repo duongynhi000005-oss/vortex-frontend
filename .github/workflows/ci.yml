@@ -61,10 +61,18 @@ jobs:
           node-version-file: '.nvmrc'
           cache: 'npm'
       - name: Check dependencies for supply-chain security (Issue #311)
-        run: node scripts/check-dependencies.mjs
+        run: node scripts/check-dependencies.mjs --report dependency-report.json
         env:
           PR_BODY: ${{ github.event.pull_request.body }}
           GITHUB_ACTOR: ${{ github.actor }}
+      - name: Upload dependency report artifact
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: dependency-report
+          path: dependency-report.json
+          if-no-files-found: ignore
+          retention-days: 30
       - name: Lint lockfile for integrity issues (Issue #480)
         run: node scripts/lint-lockfile.mjs
       - name: Verify dependency provenance (Issue #480)
