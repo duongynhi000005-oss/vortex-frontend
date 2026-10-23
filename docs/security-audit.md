@@ -447,3 +447,13 @@ An address-adjacent free-text field (such as a future memo field) currently bypa
 
 **Tests:** `src/lib/textSafety.test.ts` — real Unicode attack fixtures for every bidi control (U+202A–U+202E, U+2066–U+2069), every zero-width character (U+200B–U+200D, U+FEFF, U+00AD), combined payloads, safe ASCII/non-Latin strings asserted unchanged.
 
+
+## Rate limiting and the single SSRF guard
+
+**Rate limits (per client IP, `src/lib/server/clientIp.ts`):** `/api/verify-solver` 10 burst, 1 / 6 s; `/api/federation` 5 burst, 1 / 10 s (DNS + outbound fetch to an arbitrary domain, so strictest); `/api/account-status` 30 burst, 1 / 2 s (single call to fixed Horizon). All return `429` with `Retry-After`. `x-forwarded-for` is trusted because Vercel sets it at the edge.
+
+**Accepted risk — per-instance state:** `createTokenBucket` stores buckets in memory, so the effective burst is `capacity × warm instances`. The project provisions no shared store (no KV/Redis in `package.json`), so adding one is not justified yet; the algorithm is separated from storage (`RateLimitStore`) so a shared backend can be dropped in without changing call sites. Revisit if abuse is observed.
+
+**Single SSRF guard:** `src/lib/server/safeFetch.ts` is the only sanctioned path for any server-side fetch to a non-fixed, user- or third-party-influenced host, and the only place a private-IP blocklist may live. `npm run check:single-ssrf-guard` (CI) fails if another one is introduced under `src/`.
+
+**Empty-module guard:** `npm run check:no-empty-modules` (CI) fails on any tracked `src/**/*.{ts,tsx}` that is zero bytes or has no `export`. Known-empty files are listed in `scripts/empty-modules-allowlist.json` (pending issues #61–#65 and sibling restorations); the list must shrink to zero.

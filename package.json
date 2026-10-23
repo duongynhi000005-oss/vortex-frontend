@@ -24,6 +24,8 @@
     "test:mutation:incremental": "stryker run --incremental",
     "check:mutation-summary": "node scripts/mutation-summary.mjs",
     "test:e2e": "playwright test",
+    "check:no-empty-modules": "node scripts/check-no-empty-modules.mjs",
+    "check:single-ssrf-guard": "node scripts/check-single-ssrf-guard.mjs",
     "check:i18n": "node scripts/check-i18n-parity.mjs",
     "check:orphan-tests": "node scripts/check-orphan-tests.mjs",
     "check:docs": "node scripts/check-docs.mjs",

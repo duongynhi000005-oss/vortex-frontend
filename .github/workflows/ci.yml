@@ -105,6 +105,8 @@ jobs:
       - run: npm run check:env
       - run: npm run check:i18n
       - run: npm run check:editorconfig
+      - run: npm run check:no-empty-modules
+      - run: npm run check:single-ssrf-guard
       - run: npm run check:orphan-tests
       - run: npm run check:docs
       - name: Typecheck (strict tsconfig, must be zero errors)
