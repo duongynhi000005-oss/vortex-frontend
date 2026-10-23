@@ -283,7 +283,7 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps ${{ matrix.browser }}
       - name: Run Playwright tests
-        run: npx playwright test --project=${{ matrix.browser }} --shard=${{ matrix.shard }}/${{ strategy.job-total }}
+        run: npx playwright test --project=${{ matrix.browser }}
         env:
           PLAYWRIGHT_RETRIES: '2'
       - name: Report flaky tests
@@ -346,31 +346,6 @@ jobs:
           path: blob-report/
           retention-days: 30
 
-  e2e:
-    name: E2E (Playwright)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        with:
-          node-version-file: '.nvmrc'
-          cache: 'npm'
-      - run: npm ci
-      - name: Check dependencies for supply-chain security (Issue #311)
-        run: node scripts/check-dependencies.mjs
-        env:
-          PR_BODY: ${{ github.event.pull_request.body }}
-          GITHUB_ACTOR: ${{ github.actor }}
-      - name: Lint lockfile
-        run: npm ls --all > /dev/null
-      - name: Generate SBOM
-        run: npx --yes @cy
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        with:
-          node-version-file: '.nvmrc'
-          cache: 'npm'
-      - run: npm ci
   security:
     name: Security & supply chain
     runs-on: ubuntu-latest
@@ -401,8 +376,8 @@ jobs:
           path: sbom.json
           retention-days: 30
 
-  e2e:
-    name: E2E (Playwright)
+  e2e-smoke:
+    name: E2E smoke (Playwright, chromium)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -438,12 +413,12 @@ jobs:
   ci-success:
     name: ci-success
     if: always()
-    needs: [static, unit, build, e2e, storybook-visual, security]
+    needs: [frontend, unit, build, e2e, storybook-visual, security]
     runs-on: ubuntu-latest
     steps:
       - name: Verify all required jobs succeeded
         run: |
-          echo "static=${{ needs.static.result }}"
+          echo "frontend=${{ needs.frontend.result }} }}"
           echo "unit=${{ needs.unit.result }}"
           echo "build=${{ needs.build.result }}"
           echo "e2e=${{ needs.e2e.result }}"
