@@ -23,6 +23,7 @@ import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
 import { timeRemaining } from "@/lib/time";
 import { getMessage } from "@/i18n/messages";
 import { signCommentMessage, verifySignedComment } from "@/lib/wallet/signMessage";
+import type { ProposalComment } from "@/lib/governanceApi";
 
 const MAX_COMMENT_LENGTH = 2000;
 const MIN_COMMENT_LENGTH = 1;
@@ -202,6 +203,19 @@ export default function ProposalDetailClient({ proposalId }: { proposalId: strin
     [copyToClipboard]
   );
 
+  // One level of threading: replies are grouped under their top-level parent.
+  // A reply whose parent is hidden is hidden with it.
+  const { topLevelComments, repliesByParent } = useMemo(() => {
+    const replies: Record<string, ProposalComment[]> = {};
+    for (const c of pagedComments) {
+      if (c.parentId) (replies[c.parentId] ??= []).push(c);
+    }
+    return {
+      topLevelComments: pagedComments.filter((c) => !c.parentId),
+      repliesByParent: replies,
+    };
+  }, [pagedComments]);
+
   const handleHide = useCallback((id: string) => {
     setHiddenIds((prev) => {
       if (prev.includes(id)) return prev;
@@ -348,6 +362,66 @@ export default function ProposalDetailClient({ proposalId }: { proposalId: strin
       </div>
     );
   }
+
+  const renderComment = (comment: ProposalComment) => (
+    <article
+      key={comment.id}
+      id={comment.id}
+      className={`p-4 rounded-xl bg-vx-surface/40 border border-vx-border space-y-2 scroll-mt-24 transition-shadow ${
+        highlightId === comment.id ? "ring-2 ring-vx-sage" : ""
+      }`}
+    >
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-2">
+          <span className="font-mono text-xs text-vx-text">
+            {truncateAddress(comment.author)}
+          </span>
+          <button
+            type="button"
+            onClick={() => void handleCopyAuthor(comment.author)}
+            aria-label={getMessage("solve.governance.copyAuthor")}
+            className="text-[10px] text-vx-dim hover:text-vx-sage transition-colors"
+          >
+            {getMessage("solve.governance.copyAuthor")}
+          </button>
+          {verifiedIds[comment.id] && (
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-vx-sage-bg text-vx-sage border border-vx-sage/30">
+              {getMessage("solve.governance.verifiedAuthor")}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <time className="text-[10px] text-vx-dim" dateTime={new Date(comment.createdAt).toISOString()}>
+            {new Date(comment.createdAt).toLocaleString()}
+          </time>
+          <button
+            type="button"
+            onClick={() => void handleCopyLink(comment.id)}
+            className="text-[10px] text-vx-dim hover:text-vx-sage transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-vx-sage rounded"
+          >
+            Copy link
+          </button>
+          <button
+            type="button"
+            onClick={() => handleReport(comment.id)}
+            className="text-[10px] text-vx-dim hover:text-vx-amber transition-colors"
+          >
+            {getMessage("solve.governance.reportComment")}
+          </button>
+          <button
+            type="button"
+            onClick={() => handleHide(comment.id)}
+            className="text-[10px] text-vx-dim hover:text-vx-text transition-colors"
+          >
+            {getMessage("solve.governance.hideComment")}
+          </button>
+        </div>
+      </div>
+      <p className="text-xs sm:text-sm text-vx-muted leading-relaxed whitespace-pre-line break-words">
+        {renderSafeMarkdown(comment.text)}
+      </p>
+    </article>
+  );
 
   const handlePostComment = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -497,64 +571,15 @@ export default function ProposalDetailClient({ proposalId }: { proposalId: strin
                 No comments posted yet. Be the first to share your thoughts!
               </p>
             ) : (
-              pagedComments.map((comment) => (
-                <article
-                  key={comment.id}
-                  id={comment.id}
-                  className={`p-4 rounded-xl bg-vx-surface/40 border border-vx-border space-y-2 scroll-mt-24 transition-shadow ${
-                    highlightId === comment.id ? "ring-2 ring-vx-sage" : ""
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-2 flex-wrap">
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-xs text-vx-text">
-                        {truncateAddress(comment.author)}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => void handleCopyAuthor(comment.author)}
-                        aria-label={getMessage("solve.governance.copyAuthor")}
-                        className="text-[10px] text-vx-dim hover:text-vx-sage transition-colors"
-                      >
-                        {getMessage("solve.governance.copyAuthor")}
-                      </button>
-                      {verifiedIds[comment.id] && (
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-vx-sage-bg text-vx-sage border border-vx-sage/30">
-                          {getMessage("solve.governance.verifiedAuthor")}
-                        </span>
-                      )}
+              topLevelComments.map((comment) => (
+                <div key={comment.id} className="space-y-3">
+                  {renderComment(comment)}
+                  {repliesByParent[comment.id] && (
+                    <div className="ml-4 sm:ml-8 pl-3 sm:pl-4 border-l border-vx-border space-y-3">
+                      {repliesByParent[comment.id].map(renderComment)}
                     </div>
-                    <div className="flex items-center gap-2">
-                      <time className="text-[10px] text-vx-dim" dateTime={new Date(comment.createdAt).toISOString()}>
-                        {new Date(comment.createdAt).toLocaleString()}
-                      </time>
-                      <button
-                        type="button"
-                        onClick={() => void handleCopyLink(comment.id)}
-                        className="text-[10px] text-vx-dim hover:text-vx-sage transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-vx-sage rounded"
-                      >
-                        Copy link
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleReport(comment.id)}
-                        className="text-[10px] text-vx-dim hover:text-vx-amber transition-colors"
-                      >
-                        {getMessage("solve.governance.reportComment")}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleHide(comment.id)}
-                        className="text-[10px] text-vx-dim hover:text-vx-text transition-colors"
-                      >
-                        {getMessage("solve.governance.hideComment")}
-                      </button>
-                    </div>
-                  </div>
-                  <p className="text-xs sm:text-sm text-vx-muted leading-relaxed whitespace-pre-line break-words">
-                    {renderSafeMarkdown(comment.text)}
-                  </p>
-                </article>
+                  )}
+                </div>
               ))
             )}
           </div>

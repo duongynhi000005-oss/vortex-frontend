@@ -40,6 +40,8 @@ export type ProposalComment = {
   author: string;
   text: string;
   createdAt: string;
+  /** Top-level comment this replies to; absent for top-level comments. */
+  parentId?: string;
 };
 
 export type ProposalFilters = {

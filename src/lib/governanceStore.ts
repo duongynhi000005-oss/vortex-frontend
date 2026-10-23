@@ -90,6 +90,12 @@ export type ProposalComment = {
   signature?: CommentSignature;
   /** Set only after client-side verification succeeds. */
   verified?: boolean;
+  /**
+   * Id of the top-level comment this comment replies to. Absent for top-level
+   * comments. Nesting is limited to one level: a reply cannot be a parent.
+   * The signed message does not cover `parentId`.
+   */
+  parentId?: string;
 };
 
 export type CommentPage = {
@@ -326,8 +332,9 @@ export function verifySignedComment(
 }
 
 /**
- * Cursor pagination over the comment thread. Comments are returned newest-first
- * and the cursor is the id of the last comment in the page.
+ * Cursor pagination over the top-level comment thread. Comments are returned
+ * newest-first and the cursor is the id of the last comment in the page.
+ * Replies are excluded here; fetch them per-parent with `getProposalReplies`.
  */
 export function getProposalComments(
   proposalId: string,
@@ -335,9 +342,9 @@ export function getProposalComments(
   limit = 20
 ): CommentPage {
   const all = commentsStore[proposalId] ? [...commentsStore[proposalId]] : [];
-  const ordered = all.sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-  );
+  const ordered = all
+    .filter((c) => !c.parentId)
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   const startIndex = cursor ? ordered.findIndex((c) => c.id === cursor) + 1 : 0;
   const slice = ordered.slice(startIndex, startIndex + limit);
   const last = slice[slice.length - 1];
@@ -348,16 +355,41 @@ export function getProposalComments(
   };
 }
 
+/**
+ * Replies to one top-level comment, oldest-first so the thread reads as a
+ * conversation.
+ */
+export function getProposalReplies(proposalId: string, parentId: string): ProposalComment[] {
+  const all = commentsStore[proposalId] ?? [];
+  return all
+    .filter((c) => c.parentId === parentId)
+    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+}
+
 export type AddCommentInput = {
   proposalId: string;
   author: string;
   text: string;
   signature?: CommentSignature;
   verified?: boolean;
+  /** Top-level comment to reply to. Must exist on the same proposal and not be a reply. */
+  parentId?: string;
 };
 
 export function addProposalComment(input: AddCommentInput): ProposalComment {
   const sanitized = sanitizeText(input.text);
+  const existing = commentsStore[input.proposalId] ?? [];
+
+  if (input.parentId) {
+    const parent = existing.find((c) => c.id === input.parentId);
+    if (!parent) {
+      throw new Error(`Parent comment not found: ${input.parentId}`);
+    }
+    if (parent.parentId) {
+      throw new Error("Replies can only be posted to top-level comments");
+    }
+  }
+
   const newComment: ProposalComment = {
     id: `c-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
     proposalId: input.proposalId,
@@ -366,6 +398,7 @@ export function addProposalComment(input: AddCommentInput): ProposalComment {
     createdAt: new Date().toISOString(),
     signature: input.signature,
     verified: input.verified === true,
+    parentId: input.parentId,
   };
 
   if (!commentsStore[input.proposalId]) {
@@ -375,8 +408,15 @@ export function addProposalComment(input: AddCommentInput): ProposalComment {
   return newComment;
 }
 
+/**
+ * Removes a comment. Removing a top-level comment also removes its replies
+ * (cascade), so no reply is ever left pointing at a missing parent. Removing a
+ * reply removes only that reply.
+ */
 export function removeProposalComment(proposalId: string, commentId: string): void {
   const list = commentsStore[proposalId];
   if (!list) return;
-  commentsStore[proposalId] = list.filter((c) => c.id !== commentId);
+  commentsStore[proposalId] = list.filter(
+    (c) => c.id !== commentId && c.parentId !== commentId
+  );
 }
