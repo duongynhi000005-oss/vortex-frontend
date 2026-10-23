@@ -25,7 +25,7 @@ import {
   inactiveReasons,
   solverDashboardCsv,
 } from "@/lib/solverDashboard";
-import { BarChart } from "@/components/charts/BarChart";
+import { BarChart } from "@/components/charts";
 
 const HIDE_BALANCES_KEY = "vortex:solver-dashboard:hide-balances";
 const NOTIFY_EXPIRY_KEY = "vortex:solver-dashboard:notify-expiry";
