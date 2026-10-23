@@ -91,4 +91,8 @@ export const en = {
   "governance.quorum.passing": "Passing",
   "governance.quorum.failing": "Not passing",
   "governance.quorum.abstain": "Votes Abstain",
+  "notifications.slaBreach.title": "SLA Threshold Breached",
+  "notifications.slaBreach.p50": "p50 fill time exceeded SLA ({value}s > {threshold}s)",
+  "notifications.slaBreach.p90": "p90 fill time exceeded SLA ({value}s > {threshold}s)",
+  "notifications.slaBreach.p99": "p99 fill time exceeded SLA ({value}s > {threshold}s)",
 } as const;

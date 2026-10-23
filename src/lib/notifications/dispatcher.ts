@@ -1,8 +1,20 @@
 import { secureLogger } from "@/lib/secureLogging";
 import { loadJSON, saveJSON } from "@/lib/persist";
-import type { NotificationPreferences } from "@/store/notificationPreferences";
+import type { NotifiableStatus, NotificationPreferences } from "@/store/notificationPreferences";
+import type { FeedItem } from "@/lib/types";
 
 export type NotificationPermissionState = "default" | "granted" | "denied" | "unsupported";
+
+export type DispatchContext = {
+  prefs: NotificationPreferences;
+  status: FeedItem["status"];
+  visible: boolean;
+  isLeader: boolean;
+  permission: NotificationPermissionState;
+  now: Date;
+};
+
+export type ChannelDecision = { toast: boolean; browser: boolean; sound: boolean };
 
 export interface NotificationIntent {
   status: string;
@@ -70,8 +82,64 @@ function recordHistory(intent: NotificationIntent): void {
   emitHistoryChange();
 }
 
-export function buildNotificationBody(intent: NotificationIntent, showDetails: boolean): string {
-  return showDetails ? intent.body : intent.title;
+function toMinutes(hhmm: string): number | null {
+  const m = /^(\d{2}):(\d{2})$/.exec(hhmm);
+  return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+}
+
+export function isQuietHours(start: string, end: string, now: Date): boolean;
+export function isQuietHours(prefs: NotificationPreferences, now: Date): boolean;
+export function isQuietHours(
+  startOrPrefs: string | NotificationPreferences,
+  endOrNow?: string | Date,
+  maybeNow?: Date,
+): boolean {
+  let start: string;
+  let end: string;
+  let now: Date;
+
+  if (typeof startOrPrefs === "object") {
+    start = startOrPrefs.quietStart;
+    end = startOrPrefs.quietEnd;
+    now = (endOrNow as Date) ?? new Date();
+  } else {
+    start = startOrPrefs;
+    end = (endOrNow as string) ?? "";
+    now = maybeNow ?? new Date();
+  }
+
+  const s = toMinutes(start);
+  const e = toMinutes(end);
+  if (s === null || e === null || s === e) return false;
+  const cur = now.getHours() * 60 + now.getMinutes();
+  return s < e ? cur >= s && cur < e : cur >= s || cur < e;
+}
+
+export function buildNotificationBody(
+  items: FeedItem[],
+  showDetails: boolean,
+): { title: string; body: string; href: string };
+export function buildNotificationBody(
+  intent: NotificationIntent,
+  showDetails: boolean,
+): string;
+export function buildNotificationBody(
+  intentOrItems: NotificationIntent | FeedItem[],
+  showDetails: boolean,
+): string | { title: string; body: string; href: string } {
+  if (Array.isArray(intentOrItems)) {
+    const items = intentOrItems;
+    if (items.length > 1) {
+      return { title: "Vortex", body: `${items.length} of your intents updated`, href: "/my-intents" };
+    }
+    const item = items[0] as FeedItem;
+    const body = showDetails
+      ? `${item.srcAmount} ${item.srcToken} → ${item.dstToken} is now ${item.status}`
+      : `Intent ${item.id.slice(0, 8)} is now ${item.status}`;
+    return { title: "Vortex", body, href: `/explore/${item.id}` };
+  }
+
+  return showDetails ? intentOrItems.body : intentOrItems.title;
 }
 
 /**
@@ -81,22 +149,50 @@ export function buildNotificationBody(intent: NotificationIntent, showDetails: b
  */
 export function isSoundEnabledForStatus(prefs: NotificationPreferences, status: string): boolean {
   const perStatus = prefs.channels.soundByStatus;
-  if (perStatus && typeof perStatus[status] === "boolean") {
-    return perStatus[status];
+  if (perStatus && typeof perStatus[status as NotifiableStatus] === "boolean") {
+    return perStatus[status as NotifiableStatus];
   }
   return prefs.channels.sound;
 }
 
+export function decideChannels(ctx: DispatchContext): ChannelDecision;
 export function decideChannels(
   prefs: NotificationPreferences,
   intent: NotificationIntent,
+  now?: Date,
+): ChannelDecision;
+export function decideChannels(
+  ctxOrPrefs: DispatchContext | NotificationPreferences,
+  intent?: NotificationIntent,
   now: Date = new Date(),
-): { toast: boolean; browser: boolean; sound: boolean } {
-  const statusEnabled = prefs.statuses[intent.status] !== false;
-  const decision = {
+): ChannelDecision {
+  if ("prefs" in ctxOrPrefs && "status" in ctxOrPrefs) {
+    // Pure context decision for live intents
+    const { prefs, status, visible, isLeader, permission, now: ctxNow } = ctxOrPrefs;
+    if (status === "pending" || !prefs.statuses[status as NotifiableStatus]) {
+      return { toast: false, browser: false, sound: false };
+    }
+    const quiet = isQuietHours(prefs.quietStart, prefs.quietEnd, ctxNow);
+
+    if (visible) {
+      return { toast: prefs.channels.toast, browser: false, sound: prefs.channels.sound && !quiet };
+    }
+    const browser = prefs.channels.browser && permission === "granted" && isLeader && !quiet;
+    return {
+      toast: prefs.channels.toast && !browser,
+      browser,
+      sound: false,
+    };
+  }
+
+  // Intent-based decision
+  const prefs = ctxOrPrefs as NotificationPreferences;
+  const targetIntent = intent!;
+  const statusEnabled = prefs.statuses[targetIntent.status as NotifiableStatus] !== false;
+  const decision: ChannelDecision = {
     toast: prefs.channels.toast && statusEnabled,
     browser: prefs.channels.browser && statusEnabled,
-    sound: isSoundEnabledForStatus(prefs, intent.status) && statusEnabled,
+    sound: isSoundEnabledForStatus(prefs, targetIntent.status) && statusEnabled,
   };
 
   const suppressed = isQuietHours(prefs, now) || (!decision.toast && !decision.browser && !decision.sound);
@@ -105,19 +201,8 @@ export function decideChannels(
   }
 
   // Record only notifications that are actually dispatched.
-  recordHistory(intent);
+  recordHistory(targetIntent);
   return decision;
-}
-
-function isQuietHours(prefs: NotificationPreferences, now: Date): boolean {
-  const { quietStart, quietEnd } = prefs;
-  if (!quietStart || !quietEnd || quietStart === quietEnd) return false;
-  const minutes = now.getHours() * 60 + now.getMinutes();
-  const [sh, sm] = quietStart.split(":").map(Number);
-  const [eh, em] = quietEnd.split(":").map(Number);
-  const start = sh * 60 + sm;
-  const end = eh * 60 + em;
-  return start < end ? minutes >= start && minutes < end : minutes >= start || minutes < end;
 }
 
 export function dispatchNotification(prefs: NotificationPreferences, intent: NotificationIntent): void {
