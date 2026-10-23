@@ -53,22 +53,12 @@ export type GovernanceProposal = {
 };
 
 /**
- * Canonical signed-comment message format (documented spec):
- *
- *   stellar-governance-comment:v1\n
- *   proposalId:<proposalId>\n
- *   textHash:<sha256-hex-of-NFC-normalised-text>\n
- *   timestamp:<unix-seconds>\n
- *
- * The text is Unicode NFC-normalised before hashing so that visually identical
- * comments produce identical signatures. The timestamp is bound into the signed
- * payload together with the proposalId, which prevents replaying a signature on
- * another proposal or outside the freshness window.
+ * Comment length bounds: single source of truth for the UI and the hooks.
+ * Signing, hashing and verification (and the canonical message spec) live in
+ * `src/lib/wallet/signMessage.ts`.
  */
-export const COMMENT_MESSAGE_VERSION = "stellar-governance-comment:v1";
 export const COMMENT_MIN_LENGTH = 1;
-export const COMMENT_MAX_LENGTH = 2000;
-export const COMMENT_TIMESTAMP_WINDOW_SECONDS = 300;
+export const COMMENT_MAX_LENGTH = 500;
 
 export type CommentSignature = {
   /** Base64 signature produced by SEP-53 message signing (or the signMessage shim). */
@@ -263,72 +253,6 @@ export function bucketProposalsByMonth(proposals: GovernanceProposal[]): ChartSe
     name: outcome,
     data: labels.map((label) => ({ label, value: byMonth[label]?.[outcome] ?? 0 })),
   }));
-}
-
-/**
- * Builds the canonical, signed message for a comment. The text is NFC-normalised
- * before hashing so that equivalent Unicode inputs sign identically.
- */
-export function buildCommentMessage(
-  proposalId: string,
-  text: string,
-  timestamp: number
-): string {
-  return [
-    COMMENT_MESSAGE_VERSION,
-    `proposalId:${proposalId}`,
-    `textHash:${hashCommentText(text)}`,
-    `timestamp:${timestamp}`,
-  ].join("\n");
-}
-
-/**
- * sha256 hex of the NFC-normalised comment text. Uses WebCrypto when available
- * and falls back to a deterministic FNV-1a hex digest in non-crypto environments
- * (e.g. tests) so the canonical format stays stable.
- */
-export function hashCommentText(text: string): string {
-  const normalised = text.normalize("NFC");
-  const cryptoObj = (globalThis as { crypto?: Crypto }).crypto;
-  if (cryptoObj?.subtle) {
-    // Synchronous callers need a stable digest; WebCrypto is async, so we use a
-    // deterministic fallback here and let callers that need sha256 await it.
-    return fnv1aHex(normalised);
-  }
-  return fnv1aHex(normalised);
-}
-
-function fnv1aHex(input: string): string {
-  let hash = 0x811c9dc5;
-  for (let i = 0; i < input.length; i += 1) {
-    hash ^= input.charCodeAt(i);
-    hash = Math.imul(hash, 0x01000193) >>> 0;
-  }
-  return hash.toString(16).padStart(8, "0");
-}
-
-/**
- * Pure verification of a signed comment. Returns true only when the signature
- * covers the canonical message for this proposalId/text/timestamp and the
- * timestamp is inside the freshness window. `verify` is injected so the store
- * stays free of a hard stellar-sdk dependency at module load time; callers pass
- * `(message, signature, publicKey) => Keypair.fromPublicKey(publicKey).verify(...)`.
- */
-export function verifySignedComment(
-  comment: ProposalComment,
-  verify: (message: string, signature: string, publicKey: string) => boolean,
-  nowSeconds: number = Math.floor(Date.now() / 1000)
-): boolean {
-  const sig = comment.signature;
-  if (!sig || !sig.signature || !sig.timestamp) return false;
-  if (Math.abs(nowSeconds - sig.timestamp) > COMMENT_TIMESTAMP_WINDOW_SECONDS) return false;
-  if (sig.textHash !== hashCommentText(comment.text)) return false;
-  const message = buildCommentMessage(comment.proposalId, comment.text, sig.timestamp);
-  try {
-    return verify(message, sig.signature, comment.author);
-  } catch {
-    return false;
-  }
 }
 
 /**

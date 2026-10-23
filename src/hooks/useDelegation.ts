@@ -2,6 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useVotingPower } from './useVotingPower';
 import { secureLogger } from '../lib/secureLogging';
 
+// Canonical address-poisoning check lives in the shared address module.
+export { isConfusableAddress } from '../lib/stellarAddress';
+
 /**
  * Voting delegation flow (issues.md #41).
  *
@@ -71,17 +74,6 @@ export interface UseDelegationResult {
 }
 
 const SELF_ADDRESS = 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF';
-
-/**
- * Detects visually confusable addresses (address-poisoning defence).
- * Compares the leading and trailing characters of two addresses.
- */
-export function isConfusableAddress(a: string, b: string): boolean {
-  if (!a || !b || a === b) return false;
-  const prefix = (s: string) => s.slice(0, 6).toUpperCase();
-  const suffix = (s: string) => s.slice(-6).toUpperCase();
-  return prefix(a) === prefix(b) || suffix(a) === suffix(b);
-}
 
 /**
  * Sanitises free-form delegate profile text before rendering.

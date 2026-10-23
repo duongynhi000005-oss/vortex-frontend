@@ -25,12 +25,17 @@ import { timeRemaining } from "@/lib/time";
 import { getMessage } from "@/i18n/messages";
 import { signCommentMessage, verifySignedComment } from "@/lib/wallet/signMessage";
 <<<<<<< HEAD
+<<<<<<< HEAD
 import type { ProposalComment } from "@/lib/governanceApi";
 =======
 import { ProposalPreviewCard } from "../ProposalPreviewCard";
 >>>>>>> origin/pr/728
+=======
+import { COMMENT_MAX_LENGTH } from "@/lib/governanceStore";
+import { computeProposalTally } from "@/lib/governanceImpact";
+import { useTranslation } from "@/lib/i18n/I18nProvider";
+>>>>>>> origin/pr/739
 
-const MAX_COMMENT_LENGTH = 2000;
 const MIN_COMMENT_LENGTH = 1;
 const PAGE_SIZE = 20;
 const RATE_LIMIT_WINDOW_MS = 10_000;
@@ -116,7 +121,12 @@ function renderSafeMarkdown(text: string): React.ReactNode[] {
   return nodes;
 }
 
+function formatPercent(fraction: number): string {
+  return `${(fraction * 100).toFixed(1)}%`;
+}
+
 export default function ProposalDetailClient({ proposalId }: { proposalId: string }) {
+  const { t } = useTranslation();
   const { isConnected, address: userAddress } = useWalletStore();
 
   const { proposal, isLoading, error } = useProposal(proposalId);
@@ -259,6 +269,8 @@ export default function ProposalDetailClient({ proposalId }: { proposalId: strin
     return null;
   }, []);
 
+  const tally = computeProposalTally(proposal);
+
   const handlePostComment = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
@@ -271,7 +283,7 @@ export default function ProposalDetailClient({ proposalId }: { proposalId: strin
       return;
     }
 
-    const validation = validateCommentText(commentText, MAX_COMMENT_LENGTH);
+    const validation = validateCommentText(commentText, COMMENT_MAX_LENGTH);
     if (!validation.valid || commentText.trim().length < MIN_COMMENT_LENGTH) {
       setErrorMsg(validation.error || getMessage("solve.governance.emptyCommentError"));
       return;
@@ -475,6 +487,58 @@ export default function ProposalDetailClient({ proposalId }: { proposalId: strin
           <div className="space-y-6">
             <ProposalPreviewCard proposal={proposal} />
             <QuorumProgress proposal={proposal} />
+            {tally && (
+              <section aria-labelledby="quorum-heading" className="card p-5 sm:p-6 space-y-3">
+                <h3 id="quorum-heading" className="text-xs font-semibold text-vx-text">
+                  {t("governance.quorum.title")}
+                </h3>
+                <div>
+                  <div className="flex items-center justify-between text-xs mb-1">
+                    <span className="text-vx-muted">{t("governance.quorum.turnout")}</span>
+                    <span className="num text-vx-text">{formatPercent(tally.turnoutFraction)}</span>
+                  </div>
+                  <div
+                    role="progressbar"
+                    aria-label={t("governance.quorum.turnout")}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={Math.round(Math.min(tally.turnoutFraction, 1) * 100)}
+                    className="relative h-2 rounded-full bg-vx-surface border border-vx-border overflow-hidden"
+                  >
+                    <div
+                      className={`h-full ${tally.quorumMet ? "bg-vx-sage" : "bg-vx-amber"}`}
+                      style={{ width: `${Math.min(tally.turnoutFraction, 1) * 100}%` }}
+                    />
+                    <div
+                      aria-hidden="true"
+                      className="absolute top-0 bottom-0 w-0.5 bg-vx-text"
+                      style={{ left: `${tally.quorumFraction * 100}%` }}
+                    />
+                  </div>
+                  <p className="text-xs text-vx-muted mt-1">
+                    {t("governance.quorum.required", { percent: formatPercent(tally.quorumFraction) })}
+                    {" · "}
+                    <span className={tally.quorumMet ? "text-vx-sage" : "text-vx-amber"}>
+                      {t(tally.quorumMet ? "governance.quorum.met" : "governance.quorum.notMet")}
+                    </span>
+                  </p>
+                </div>
+                <p className="text-xs text-vx-muted">
+                  {t("governance.quorum.approval", {
+                    percent: formatPercent(tally.approvalFraction),
+                    threshold: formatPercent(tally.approvalThreshold),
+                  })}
+                  {" · "}
+                  <span className={tally.approvalMet ? "text-vx-sage" : "text-vx-amber"}>
+                    {t(tally.approvalMet ? "governance.quorum.passing" : "governance.quorum.failing")}
+                  </span>
+                </p>
+                <div className="bg-vx-surface/40 p-3 rounded-lg border border-vx-border">
+                  <div className="text-xs text-vx-muted">{t("governance.quorum.abstain")}</div>
+                  <div className="text-lg font-bold text-vx-text num">{tally.votesAbstain.toLocaleString()}</div>
+                </div>
+              </section>
+            )}
 
         {/* ── Community Discussion / Comment Thread Section ── */}
         <section aria-labelledby="discussion-heading" className="card p-5 sm:p-6">

@@ -30,6 +30,12 @@ export type GovernanceProposal = {
   status: "active" | "passed" | "rejected";
   votesFor: number;
   votesAgainst: number;
+  /** Optional tally fields; the quorum section is hidden when they are absent. */
+  votesAbstain?: number;
+  totalSupply?: number;
+  quorumFraction?: number;
+  approvalThreshold?: number;
+  abstainCountsTowardQuorum?: boolean;
   createdAt: string;
   deadline: string;
 };
