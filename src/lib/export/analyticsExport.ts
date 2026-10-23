@@ -1,17 +1,25 @@
 /**
  * Analytics snapshot export utilities.
- * Builds CSV bundles (KPIs, volume series, routes) with safe CSV escaping.
+ * Builds CSV bundles (KPIs, volume series, routes, SLA, concentration, top-movers) with safe CSV escaping.
  * Shareable URL encoding/decoding for analytics range/filter state.
  */
 
 import { escapeCsv } from "@/lib/csv";
 import { looksLikeSensitiveBlob } from "@/lib/secureLogging";
 import { isValidStrKey } from "@/lib/stellarAddress";
-import type { AnalyticsSummary, AnalyticsVolumePoint, AnalyticsRouteEntry } from "@/lib/analytics";
+import {
+  SLA_THRESHOLDS,
+  type AnalyticsSummary,
+  type AnalyticsVolumePoint,
+  type AnalyticsRouteEntry,
+  type SlaPanelData,
+  type ConcentrationResult,
+  type TopMover,
+} from "@/lib/analytics";
 
 // ─── CSV export ────────────────────────────────────────────────────────────────
 
-type ExportMeta = {
+export type ExportMeta = {
   title: string;
   range: string;
   generatedAt: string;
@@ -19,7 +27,12 @@ type ExportMeta = {
   dataCompletenessNote: string;
 };
 
-function buildMetaRows(meta: ExportMeta): string {
+export interface AnalyticsExportSections {
+  concentration?: ConcentrationResult;
+  topMovers?: TopMover[];
+}
+
+export function buildMetaRows(meta: ExportMeta): string {
   const lines = [
     `# ${escapeCsv(meta.title)}`,
     `# Range: ${escapeCsv(meta.range)}`,
@@ -31,7 +44,7 @@ function buildMetaRows(meta: ExportMeta): string {
   return lines.join("\n");
 }
 
-function volumeSeriesCsv(points: AnalyticsVolumePoint[]): string {
+export function volumeSeriesCsv(points: AnalyticsVolumePoint[]): string {
   const header = "date,totalVolumeUsd";
   const rows = points.map(
     (p) => `${escapeCsv(p.date)},${escapeCsv(p.totalVolumeUsd.toFixed(2))}`,
@@ -39,7 +52,7 @@ function volumeSeriesCsv(points: AnalyticsVolumePoint[]): string {
   return [header, ...rows].join("\n");
 }
 
-function routesCsv(routes: AnalyticsRouteEntry[]): string {
+export function routesCsv(routes: AnalyticsRouteEntry[]): string {
   const header = "sourceChain,destinationToken,volumeUsd,intentCount,sharePercent";
   const totalVol = routes.reduce((s, r) => s + r.value, 0);
   const rows = routes.map((r) =>
@@ -54,7 +67,7 @@ function routesCsv(routes: AnalyticsRouteEntry[]): string {
   return [header, ...rows].join("\n");
 }
 
-function kpisCsv(summary: AnalyticsSummary): string {
+export function kpisCsv(summary: AnalyticsSummary): string {
   const header = "metric,value";
   const rows = [
     `totalVolumeUsd,${summary.totalVolumeUsd.toFixed(2)}`,
@@ -69,13 +82,104 @@ function kpisCsv(summary: AnalyticsSummary): string {
 }
 
 /**
- * Build a multi-section CSV bundle for analytics export.
+ * Build CSV section for fill-time SLA metrics (#602).
+ */
+export function slaCsv(sla?: SlaPanelData): string {
+  const header = "percentile,targetThresholdSeconds,actualSeconds,status";
+  if (!sla || sla.filledCount === 0) {
+    return [
+      header,
+      `p50,${SLA_THRESHOLDS.p50MaxSeconds},0.00,NO_DATA`,
+      `p90,${SLA_THRESHOLDS.p90MaxSeconds},0.00,NO_DATA`,
+      `p99,${SLA_THRESHOLDS.p99MaxSeconds},0.00,NO_DATA`,
+      "",
+      "metric,count",
+      "filledIntentsAnalyzed,0",
+      `pendingIntentsExcluded,${escapeCsv(String(sla?.pendingCount ?? 0))}`,
+      `clampedIntents,${escapeCsv(String(sla?.clampedCount ?? 0))}`,
+    ].join("\n");
+  }
+
+  const rows = [
+    `p50,${SLA_THRESHOLDS.p50MaxSeconds},${escapeCsv(sla.percentiles.p50.toFixed(2))},${sla.sla.p50 ? "PASS" : "FAIL"}`,
+    `p90,${SLA_THRESHOLDS.p90MaxSeconds},${escapeCsv(sla.percentiles.p90.toFixed(2))},${sla.sla.p90 ? "PASS" : "FAIL"}`,
+    `p99,${SLA_THRESHOLDS.p99MaxSeconds},${escapeCsv(sla.percentiles.p99.toFixed(2))},${sla.sla.p99 ? "PASS" : "FAIL"}`,
+    "",
+    "metric,count",
+    `filledIntentsAnalyzed,${escapeCsv(String(sla.filledCount))}`,
+    `pendingIntentsExcluded,${escapeCsv(String(sla.pendingCount))}`,
+    `clampedIntents,${escapeCsv(String(sla.clampedCount))}`,
+  ];
+
+  return [header, ...rows].join("\n");
+}
+
+/**
+ * Build CSV section for market concentration / HHI index (#602).
+ */
+export function concentrationCsv(concentration?: ConcentrationResult): string {
+  const header = "metric,value";
+  if (!concentration) {
+    return [
+      header,
+      "hhiIndex,0",
+      "top1SharePercent,0.00",
+      "top3SharePercent,0.00",
+      "concentrationLevel,competitive",
+    ].join("\n");
+  }
+
+  const summaryRows = [
+    `hhiIndex,${escapeCsv(String(concentration.hhi))}`,
+    `top1SharePercent,${escapeCsv(concentration.top1SharePct.toFixed(2))}`,
+    `top3SharePercent,${escapeCsv(concentration.top3SharePct.toFixed(2))}`,
+    `concentrationLevel,${escapeCsv(concentration.level)}`,
+  ];
+
+  const entityHeader = "entity,sharePercent";
+  const entityRows = (concentration.entities || []).map(
+    (e) => `${escapeCsv(e.label)},${escapeCsv(e.sharePct.toFixed(2))}`,
+  );
+
+  return [header, ...summaryRows, "", entityHeader, ...entityRows].join("\n");
+}
+
+/**
+ * Build CSV section for top movers / share velocity (#602).
+ */
+export function topMoversCsv(topMovers?: TopMover[]): string {
+  const header = "entity,currentSharePercent,previousSharePercent,deltaSharePercent";
+  if (!topMovers || topMovers.length === 0) {
+    return header;
+  }
+
+  const rows = topMovers.map((m) => {
+    const deltaSign = m.deltaSharePct > 0 ? "+" : "";
+    return [
+      escapeCsv(m.label),
+      escapeCsv(m.currentSharePct.toFixed(2)),
+      escapeCsv(m.previousSharePct.toFixed(2)),
+      escapeCsv(`${deltaSign}${m.deltaSharePct.toFixed(2)}`),
+    ].join(",");
+  });
+
+  return [header, ...rows].join("\n");
+}
+
+/**
+ * Build a multi-section CSV bundle for analytics export (#602).
  * Sections are separated by blank lines with section headers.
+ * Backward compatibility: original sections (KPIs, Volume Series, Routes)
+ * retain identical order and formats.
  */
 export function buildAnalyticsCsvBundle(
   summary: AnalyticsSummary,
   meta: ExportMeta,
+  extra?: AnalyticsExportSections,
 ): string {
+  const concentration = extra?.concentration ?? (summary as any).concentration;
+  const topMovers = extra?.topMovers ?? (summary as any).topMovers;
+
   const sections = [
     buildMetaRows(meta),
     "## KPIs\n" + kpisCsv(summary),
@@ -83,6 +187,12 @@ export function buildAnalyticsCsvBundle(
     "## Volume Series\n" + volumeSeriesCsv(summary.volumeOverTime),
     "",
     "## Routes\n" + routesCsv(summary.routeBreakdown),
+    "",
+    "## SLA Performance\n" + slaCsv(summary.slaPanel),
+    "",
+    "## Market Concentration\n" + concentrationCsv(concentration),
+    "",
+    "## Top Movers\n" + topMoversCsv(topMovers),
   ];
   return sections.join("\n");
 }

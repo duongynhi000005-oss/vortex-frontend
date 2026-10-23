@@ -421,6 +421,7 @@ export function buildSankeyData(
 
 // ─── Main aggregator ──────────────────────────────────────────────────────────
 
+
 export function computeAnalytics(allIntents: FeedItem[]): AnalyticsSummary {
   // Optimistic (unconfirmed client-side) entries never count toward analytics.
   const intents = allIntents.filter((i) => !(i as { optimistic?: boolean }).optimistic);
@@ -431,94 +432,43 @@ export function computeAnalytics(allIntents: FeedItem[]): AnalyticsSummary {
     failed: 0,
   };
 
-/**
- * Incremental analytics aggregator. Both the synchronous `computeAnalytics`
- * helper and the Web Worker wrap this class so that incremental updates stay
- * equivalent to a full recompute. The class keeps per-intent contributions so
- * that `update`/`remove` can subtract the previous contribution before adding
- * the new one.
- */
-export class AnalyticsAggregator {
-  private readonly options: ComputeAnalyticsOptions;
-  private readonly granularity: Granularity;
-  private readonly fromMs: number;
-  private readonly toMs: number;
-  private readonly nowMs: number;
-  private readonly sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+  const chainMap = new Map<string, number>();
+  const destinationTokenMap = new Map<string, number>();
+  const routeMap = new Map<string, { sourceChain: string; destinationToken: string; value: number; count: number; color: string }>();
+  const volumeByDay = new Map<string, number>();
+  const now = Date.now();
+  const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
 
-  private readonly intents = new Map<string, FeedItem>();
-  private readonly contributions = new Map<string, number>();
+  // Fill-time / SLA data collection
+  const fillTimesSeconds: number[] = [];
+  let clampedCount = 0;
+  let pendingCount = 0;
+  const successByDay = new Map<string, { filled: number; total: number }>();
 
-  private statusCounts: Record<IntentStatus, number> = emptyStatusCounts();
-  private readonly chainMap = new Map<string, number>();
-  private readonly destinationTokenMap = new Map<string, number>();
-  private readonly routeMap = new Map<
-    string,
-    { sourceChain: string; destinationToken: string; value: number; count: number; color: string }
-  >();
-  private readonly volumeByBucket = new Map<string, number>();
+  // Previous-period volume (equal-length window before current 7d)
+  const fourteenDaysMs = 14 * 24 * 60 * 60 * 1000;
 
-  private totalVolumeUsd = 0;
-  private rollingVolumeUsd = 0;
-  private ignoredRows = 0;
+  let totalVolumeUsd = 0;
+  let rollingVolumeUsd = 0;
+  let previousPeriodVolumeUsd = 0;
+  let previousPeriodRollingUsd = 0;
+  const previousPeriodIntents: FeedItem[] = [];
 
-  constructor(intents: FeedItem[], options: ComputeAnalyticsOptions) {
-    this.options = options;
-    this.granularity = autoGranularity(options.from, options.to, options.granularity);
-    this.fromMs = options.from.getTime();
-    this.toMs = options.to.getTime();
-    this.nowMs = options.now.getTime();
+  // Sparkline buckets for current 7-day window (one value per day, 7 points)
+  const sparklineByDay = new Map<string, number>();
+  const intentCountByDay = new Map<string, number>();
 
-    for (const intent of intents) {
-      this.add(intent);
-    }
-  }
+  let datasetSince: string | undefined;
 
-  /** Apply a single delta. Returns true when the aggregator state changed. */
-  apply(delta: AnalyticsDelta): boolean {
-    switch (delta.type) {
-      case "insert":
-        return this.add(delta.intent);
-      case "update":
-        return this.update(delta.intent);
-      case "remove":
-        return this.remove(delta.id);
-      default:
-        return false;
-    }
-  }
-
-  /** Apply a batch of deltas in order. */
-  applyAll(deltas: AnalyticsDelta[]): void {
-    for (const delta of deltas) {
-      this.apply(delta);
-    }
-  }
-
-  add(intent: FeedItem): boolean {
-    if (this.intents.has(intent.id)) {
-      return this.update(intent);
-    }
-
-    const createdAtMs = new Date(intent.createdAt).getTime();
-    if (!Number.isFinite(createdAtMs)) {
-      this.ignoredRows += 1;
-      this.intents.set(intent.id, intent);
-      this.contributions.set(intent.id, 0);
-      return true;
-    }
-
+  for (const intent of intents) {
     const amount = Number.parseFloat(intent.srcAmount ?? "0");
     const tokenPriceUsd = getTokenPriceUsd(intent.srcChain, intent.srcToken);
-    // Exact decimal product; converted to a number only for chart aggregation.
-    const volumeUsd = amount && Number.isFinite(tokenPriceUsd)
-      ? toNumber(mul(amount, fromNumber(tokenPriceUsd, USD_DECIMALS), USD_DECIMALS))
-      : 0;
+    const volumeUsd = amount && Number.isFinite(tokenPriceUsd) ? amount * tokenPriceUsd : 0;
 
-    this.intents.set(intent.id, intent);
-    this.contributions.set(intent.id, volumeUsd);
+    totalVolumeUsd += volumeUsd;
 
-    this.totalVolumeUsd += volumeUsd;
+    const dayKey = formatDayKey(intent.createdAt);
+    volumeByDay.set(dayKey, (volumeByDay.get(dayKey) ?? 0) + volumeUsd);
 
     const createdAtMs = new Date(intent.createdAt).getTime();
 
@@ -536,30 +486,16 @@ export class AnalyticsAggregator {
       previousPeriodIntents.push(intent);
     }
 
-    if (createdAtMs >= this.fromMs && createdAtMs <= this.toMs) {
-      const bucketKey = utcBucketKey(new Date(createdAtMs), this.granularity);
-      this.volumeByBucket.set(bucketKey, (this.volumeByBucket.get(bucketKey) ?? 0) + volumeUsd);
-    }
+    statusCounts[intent.status] += 1;
 
-    if (this.nowMs - createdAtMs <= this.sevenDaysMs) {
-      this.rollingVolumeUsd += volumeUsd;
-    }
-    }
-
-    if (this.nowMs - createdAtMs <= this.sevenDaysMs) {
-      this.rollingVolumeUsd += volumeUsd;
-    }
-
-    this.statusCounts[intent.status] += 1;
-
-    this.chainMap.set(intent.srcChain, (this.chainMap.get(intent.srcChain) ?? 0) + volumeUsd);
-    this.destinationTokenMap.set(
+    chainMap.set(intent.srcChain, (chainMap.get(intent.srcChain) ?? 0) + volumeUsd);
+    destinationTokenMap.set(
       intent.dstToken,
-      (this.destinationTokenMap.get(intent.dstToken) ?? 0) + volumeUsd,
+      (destinationTokenMap.get(intent.dstToken) ?? 0) + volumeUsd,
     );
 
     const routeKey = `${intent.srcChain}:${intent.dstToken}`;
-    const routeEntry = this.routeMap.get(routeKey) ?? {
+    const routeEntry = routeMap.get(routeKey) ?? {
       sourceChain: intent.srcChain,
       destinationToken: intent.dstToken,
       value: 0,
@@ -568,7 +504,7 @@ export class AnalyticsAggregator {
     };
     routeEntry.value += volumeUsd;
     routeEntry.count += 1;
-    this.routeMap.set(routeKey, routeEntry);
+    routeMap.set(routeKey, routeEntry);
 
     // Success-rate by day
     const dayBucket = successByDay.get(dayKey) ?? { filled: 0, total: 0 };
@@ -593,92 +529,149 @@ export class AnalyticsAggregator {
     } else if (intent.status === "pending" || intent.status === "accepted") {
       pendingCount += 1;
     }
-
-    return true;
   }
 
-  update(intent: FeedItem): boolean {
-    const previous = this.intents.get(intent.id);
-    if (!previous) {
-      return this.add(intent);
-    }
+  const chainBreakdown = [...chainMap.entries()]
+    .map(([label, value]) => ({
+      label,
+      value,
+      percent: totalVolumeUsd > 0 ? (value / totalVolumeUsd) * 100 : 0,
+      color: getChainColor(label),
+    }))
+    .sort((a, b) => b.value - a.value);
 
-    this.remove(intent.id);
-    return this.add(intent);
-  }
+  const destinationTokenBreakdown = [...destinationTokenMap.entries()]
+    .map(([label, value]) => ({
+      label,
+      value,
+      percent: totalVolumeUsd > 0 ? (value / totalVolumeUsd) * 100 : 0,
+      color: DST_TOKENS.find((token) => token.symbol === label)?.symbol === "XLM"
+        ? "#4CEBA8"
+        : "#A78BFA",
+    }))
+    .sort((a, b) => b.value - a.value);
 
-  remove(id: string): boolean {
-    const intent = this.intents.get(id);
-    if (!intent) {
-      return false;
-    }
+  const routeBreakdown = [...routeMap.values()]
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 8)
+    .map((entry) => ({ ...entry }));
 
-    const volumeUsd = this.contributions.get(id) ?? 0;
-    const createdAtMs = new Date(intent.createdAt).getTime();
+  const volumeOverTime = buildVolumeSeries(volumeByDay);
 
-    this.intents.delete(id);
-    this.contributions.delete(id);
+  // Build sparkline array (last 7 days in order)
+  const sparklinePoints = buildSparkline(sparklineByDay);
+  const intentCountSparkline = buildSparkline(intentCountByDay);
+  const avgSparkline = sparklinePoints.map((v, i) => {
+    const count = intentCountSparkline[i] ?? 0;
+    return count > 0 ? v / count : 0;
+  });
 
-    if (!Number.isFinite(createdAtMs)) {
-      this.ignoredRows = Math.max(0, this.ignoredRows - 1);
-      return true;
-    }
+  const prevAvg =
+    previousPeriodIntents.length > 0
+      ? previousPeriodRollingUsd / previousPeriodIntents.length
+      : undefined;
 
-    this.totalVolumeUsd -= volumeUsd;
+  const kpis: KpiSummary = {
+    totalVolume: computeKpis(
+      totalVolumeUsd,
+      previousPeriodVolumeUsd > 0 ? previousPeriodVolumeUsd : undefined,
+      sparklinePoints,
+      formatCompactUsd,
+      formatFullUsd,
+    ),
+    rollingVolume: computeKpis(
+      rollingVolumeUsd,
+      previousPeriodRollingUsd > 0 ? previousPeriodRollingUsd : undefined,
+      sparklinePoints,
+      formatCompactUsd,
+      formatFullUsd,
+    ),
+    averageSize: computeKpis(
+      intents.length > 0 ? totalVolumeUsd / intents.length : 0,
+      prevAvg,
+      avgSparkline,
+      formatCompactUsd,
+      formatFullUsd,
+    ),
+    intentCount: computeKpis(
+      intents.length,
+      previousPeriodIntents.length > 0 ? previousPeriodIntents.length : undefined,
+      intentCountSparkline,
+      formatCompact,
+      (v) => String(Math.round(v)),
+    ),
+  };
 
-    if (createdAtMs >= this.fromMs && createdAtMs <= this.toMs) {
-      const bucketKey = utcBucketKey(new Date(createdAtMs), this.granu
+  // SLA panel
+  const sortedFillTimes = [...fillTimesSeconds].sort((a, b) => a - b);
+  const successRateByDay = [...successByDay.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, { filled, total }]) => ({
+      date,
+      rate: total > 0 ? (filled / total) * 100 : 0,
+      count: total,
+    }));
 
-    const volumeUsd = this.contributions.get(id) ?? 0;
-    const createdAtMs = new Date(intent.createdAt).getTime();
+  const p50v = percentile(sortedFillTimes, 50);
+  const p90v = percentile(sortedFillTimes, 90);
+  const p99v = percentile(sortedFillTimes, 99);
 
-  remove(id: string): boolean {
-    const intent = this.intents.get(id);
-    if (!intent) {
-      return false;
-    }
+  const slaPanel: SlaPanelData = {
+    percentiles: { p50: p50v, p90: p90v, p99: p99v },
+    histogram: buildHistogram(sortedFillTimes),
+    successRateByDay,
+    successRateMovingAvg: movingAverage7(successRateByDay),
+    filledCount: fillTimesSeconds.length,
+    pendingCount,
+    clampedCount,
+    sla: {
+      p50: p50v <= SLA_THRESHOLDS.p50MaxSeconds,
+      p90: p90v <= SLA_THRESHOLDS.p90MaxSeconds,
+      p99: p99v <= SLA_THRESHOLDS.p99MaxSeconds,
+    },
+  };
 
-    const volumeUsd = this.contributions.get(id) ?? 0;
-    const createdAtMs = new Date(intent.createdAt).getTime();
+  const sankeyData = buildSankeyData(intents);
 
+  const isCapped = intents.length >= FEED_CAP;
+
+  return {
+    totalIntents: intents.length,
+    totalVolumeUsd,
+    rollingVolumeUsd,
+    averageVolumeUsd: intents.length > 0 ? totalVolumeUsd / intents.length : 0,
+    statusCounts,
+    chainBreakdown,
+    destinationTokenBreakdown,
+    routeBreakdown,
+    volumeOverTime,
+    isCapped,
+    datasetSize: intents.length,
+    datasetSince,
+    kpis,
+    slaPanel,
+    sankeyData,
+  };
 }
 
-/**
- * Pure analytics computation. Time is injected via `options.now`; no Date.now()
- * is called internally. Buckets are computed in UTC and empty buckets are
- * filled with zeros. Rows with invalid timestamps are ignored and counted.
- *
- * Delegates to `AnalyticsAggregator` so the synchronous path and the worker
- * path share the same core and stay equivalent.
- */
-export function computeAnalytics(
-  intents: FeedItem[],
-  options: ComputeAnalyticsOptions,
-): AnalyticsSummary {
-  return new AnalyticsAggregator(intents, options).snapshot();
-}
-
-function buildVolumeSeries(
-  volumeByBucket: Map<string, number>,
-  from: Date,
-  to: Date,
-  granularity: Granularity,
-): AnalyticsVolumePoint[] {
-  if (to.getTime() < from.getTime()) {
+function buildVolumeSeries(volumeByDay: Map<string, number>): AnalyticsVolumePoint[] {
+  const orderedDates = [...volumeByDay.keys()].sort();
+  if (orderedDates.length === 0) {
     return [];
   }
 
+  const earliest = new Date(orderedDates[0]!);
+  const latest = new Date(orderedDates[orderedDates.length - 1]!);
   const points: AnalyticsVolumePoint[] = [];
-  let cursor = startOfUtcBucket(from, granularity);
-  const end = to.getTime();
+  const cursor = new Date(earliest);
 
-  while (cursor.getTime() <= end) {
-    const key = utcBucketKey(cursor, granularity);
+  while (cursor <= latest) {
+    const dayKey = cursor.toISOString().slice(0, 10);
     points.push({
-      date: key,
-      totalVolumeUsd: volumeByBucket.get(key) ?? 0,
+      date: dayKey,
+      totalVolumeUsd: volumeByDay.get(dayKey) ?? 0,
     });
-    cursor = addUtcBucket(cursor, granularity);
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
   }
 
   return points;
@@ -717,7 +710,7 @@ export function getStatusDistributionEntries(statusCounts: Record<IntentStatus, 
   }));
 }
 
-// ─── Issue #468: Market-share series & concentration ─────────────────────────
+
 
 export type ShareDimension = "srcChain" | "dstToken" | "solver";
 
