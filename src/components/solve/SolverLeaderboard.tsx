@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { SkeletonCard } from "@/components/Skeleton";
-import { SolverIdentityChip } from "@/components/SolverBadge";
+import { SolverIdentityChip, SolverVerifiedBadge } from "@/components/SolverBadge";
 import { useSolvers } from "@/hooks/useSolvers";
 import { useSolverIdentity } from "@/hooks/useSolverIdentity";
 import { useColumnVisibility } from "@/hooks/useColumnVisibility";
@@ -30,7 +30,7 @@ import {
   type RankedSolver,
 } from "@/lib/solverRanking";
 
-const COLUMN_IDS = ["rank", "name", "fills", "volumeUsd", "successRate", "avgFillTimeSeconds", "bondUsd"] as const;
+const COLUMN_IDS = ["rank", "name", "verified", "fills", "volumeUsd", "successRate", "avgFillTimeSeconds", "bondUsd"] as const;
 type ColumnId = (typeof COLUMN_IDS)[number];
 const ALWAYS_VISIBLE: readonly ColumnId[] = ["rank", "name"];
 
@@ -63,12 +63,15 @@ function SolverNameCell({ solver }: { solver: RankedSolver }) {
   const identity = useSolverIdentity(solver.address, solver.homeDomain);
   return (
     <div className="min-w-0 max-sm:text-right">
-      <Link
-        href={`/solve/${solver.address}`}
-        className="text-sm font-semibold text-vx-text hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-vx-sage rounded"
-      >
-        {sanitizeDisplayText(solver.name)}
-      </Link>
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <Link
+          href={`/solve/${solver.address}`}
+          className="text-sm font-semibold text-vx-text hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-vx-sage rounded"
+        >
+          {sanitizeDisplayText(solver.name)}
+        </Link>
+        {solver.verified && <SolverVerifiedBadge isVerified={true} />}
+      </div>
       <div className="num text-[11px] text-vx-muted truncate max-w-[14rem]">{solver.address}</div>
       {solver.homeDomain ? (
         <div className="mt-1">
@@ -144,6 +147,7 @@ export function SolverLeaderboard() {
   const headers: Record<ColumnId, string> = {
     rank: t("solve.leaderboard.rank"),
     name: t("solve.leaderboard.solver"),
+    verified: t("solve.leaderboard.verified"),
     fills: t("solve.leaderboard.fills"),
     volumeUsd: t("solve.leaderboard.volume"),
     successRate: t("solve.leaderboard.success"),
@@ -164,6 +168,21 @@ export function SolverLeaderboard() {
       ),
     },
     { id: "name", header: headers.name, sortable: true, isRowHeader: true, cell: (s) => <SolverNameCell solver={s} /> },
+    {
+      id: "verified",
+      header: headers.verified,
+      sortable: true,
+      align: "center",
+      cell: (s) => (
+        <div className="flex justify-center">
+          {s.verified ? (
+            <SolverVerifiedBadge isVerified={true} />
+          ) : (
+            <span className="text-[11px] text-vx-muted select-none" aria-label="Unverified">–</span>
+          )}
+        </div>
+      ),
+    },
     { id: "fills", header: headers.fills, sortable: true, align: "right", cell: (s) => <span className="num">{nf.format(s.fills)}</span> },
     { id: "volumeUsd", header: headers.volumeUsd, sortable: true, align: "right", cell: (s) => <span className="num">{usd.format(s.volumeUsd)}</span> },
     {
@@ -186,6 +205,7 @@ export function SolverLeaderboard() {
     const ids = columns.map((c) => c.id);
     const value = (s: RankedSolver, id: ColumnId): string | number => {
       if (id === "name") return sanitizeDisplayText(s.name);
+      if (id === "verified") return s.verified ? "yes" : "no";
       if (id === "successRate") return s.successRate.toFixed(1);
       return s[id];
     };

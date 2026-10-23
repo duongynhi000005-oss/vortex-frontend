@@ -102,6 +102,39 @@ describe("sorting", () => {
     expect(parseSorts(serializeSorts(specs), LEADERBOARD_SORT_KEYS)).toEqual(specs);
     expect(parseSorts("evil:asc,fills:up,fills:asc,fills:desc", LEADERBOARD_SORT_KEYS)).toEqual([{ key: "fills", dir: "asc" }]);
   });
+
+  it("sorts by verified status: verified-first (desc) and unverified-first (asc)", () => {
+    const verifiedRows = rankSolvers([
+      solver({ address: "GA", name: "Alpha", volumeUsd: 100, verified: false }),
+      solver({ address: "GB", name: "Beta", volumeUsd: 50, verified: true }),
+      solver({ address: "GC", name: "Gamma", volumeUsd: 200, verified: false }),
+      solver({ address: "GD", name: "Delta", volumeUsd: 150, verified: true }),
+    ]);
+
+    // Descending verified sort: verified first (GD, GB), then unverified (GC, GA)
+    const descSorted = sortRankedSolvers(verifiedRows, [{ key: "verified", dir: "desc" }]);
+    expect(descSorted.map((s) => s.address)).toEqual(["GD", "GB", "GC", "GA"]);
+
+    // Ascending verified sort: unverified first (GC, GA), then verified (GD, GB)
+    const ascSorted = sortRankedSolvers(verifiedRows, [{ key: "verified", dir: "asc" }]);
+    expect(ascSorted.map((s) => s.address)).toEqual(["GC", "GA", "GD", "GB"]);
+  });
+
+  it("handles multi-sort with verified and another metric", () => {
+    const verifiedRows = rankSolvers([
+      solver({ address: "GA", name: "Alpha", volumeUsd: 100, verified: false }),
+      solver({ address: "GB", name: "Beta", volumeUsd: 50, verified: true }),
+      solver({ address: "GC", name: "Gamma", volumeUsd: 200, verified: false }),
+      solver({ address: "GD", name: "Delta", volumeUsd: 150, verified: true }),
+    ]);
+
+    // Verified first, then name ascending
+    const multiSorted = sortRankedSolvers(verifiedRows, [
+      { key: "verified", dir: "desc" },
+      { key: "name", dir: "asc" },
+    ]);
+    expect(multiSorted.map((s) => s.address)).toEqual(["GB", "GD", "GA", "GC"]);
+  });
 });
 
 describe("filterSolvers", () => {

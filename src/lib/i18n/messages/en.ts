@@ -91,4 +91,7 @@ export const en = {
   "governance.quorum.passing": "Passing",
   "governance.quorum.failing": "Not passing",
   "governance.quorum.abstain": "Votes Abstain",
+  "solve.leaderboard.verified": "Verified",
+  "solverBadge.verified": "Verified",
+  "solverBadge.unverified": "Unverified",
 } as const;

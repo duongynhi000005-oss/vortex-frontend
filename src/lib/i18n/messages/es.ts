@@ -91,4 +91,7 @@ export const es = {
   "governance.quorum.passing": "Aprobada",
   "governance.quorum.failing": "No aprobada",
   "governance.quorum.abstain": "Votos de abstención",
+  "solve.leaderboard.verified": "Verificado",
+  "solverBadge.verified": "Verificado",
+  "solverBadge.unverified": "No verificado",
 } as const satisfies Record<keyof typeof import("./en").en, string>;

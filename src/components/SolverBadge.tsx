@@ -101,3 +101,25 @@ export function SolverBadge({
     </div>
   );
 }
+
+export function SolverVerifiedBadge({
+  isVerified,
+  className = "",
+}: {
+  isVerified: boolean;
+  className?: string;
+}) {
+  const { t } = useTranslation();
+  if (!isVerified) return null;
+  return (
+    <span
+      className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-vx-sage-bg text-vx-sage border border-vx-sage/30 ${className}`}
+      data-testid="solver-verified-badge"
+      title={t("solverBadge.verified")}
+    >
+      <span aria-hidden="true">✓</span>
+      <span>{t("solverBadge.verified")}</span>
+    </span>
+  );
+}
+
