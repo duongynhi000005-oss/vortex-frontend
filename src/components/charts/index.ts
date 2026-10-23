@@ -225,16 +225,26 @@ export function LineChart(props: ChartProps) {
 export function AreaChart(props: ChartProps) {
   const { series, width = 480, height = 200 } = props;
   const data = useMemo(() => filterFinite(series[0]?.data ?? []), [series]);
+  const { active, onKeyDown } = useChartKeyboard(data.length);
   const x = bandScale(data.length, [0, width]);
   const y = linearScale([0, Math.max(1, ...data.map((d) => d.value))], [height, 0]);
   const line = data.map((d, i) => `${x(i)},${y(d.value)}`).join(' ');
   const area = `0,${height} ${line} ${width},${height}`;
   return (
     <ChartFrame {...props}>
-      <svg role="img" width={width} height={height} className="max-w-full">
+      <svg
+        role="img"
+        tabIndex={0}
+        width={width}
+        height={height}
+        onKeyDown={onKeyDown}
+        className="max-w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+      >
         <polygon fill={chartColor(0)} fillOpacity={0.25} points={area} />
         <polyline fill="none" stroke={chartColor(0)} strokeWidth={2} points={line} />
+        {data[active] ? <circle cx={x(active)} cy={y(data[active].value)} r={5} fill={chartColor(0)} /> : null}
       </svg>
+      {data[active] ? <ChartTooltip label={data[active].label} value={data[active].value} /> : null}
     </ChartFrame>
   );
 }
@@ -301,13 +311,21 @@ export function BarChart(props: ChartProps) {
 export function DonutChart(props: ChartProps) {
   const { series, width = 200, height = 200 } = props;
   const data = useMemo(() => filterFinite(series[0]?.data ?? []), [series]);
+  const { active, onKeyDown } = useChartKeyboard(data.length);
   const total = data.reduce((sum, d) => sum + Math.max(0, d.value), 0) || 1;
   const radius = Math.min(width, height) / 2 - 10;
   const circumference = 2 * Math.PI * radius;
   let offset = 0;
   return (
     <ChartFrame {...props}>
-      <svg role="img" width={width} height={height} className="max-w-full">
+      <svg
+        role="img"
+        tabIndex={0}
+        width={width}
+        height={height}
+        onKeyDown={onKeyDown}
+        className="max-w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+      >
         <g transform={`translate(${width / 2}, ${height / 2})`}>
           {data.map((d, i) => {
             const fraction = Math.max(0, d.value) / total;
@@ -318,7 +336,7 @@ export function DonutChart(props: ChartProps) {
                 r={radius}
                 fill="none"
                 stroke={chartColor(i)}
-                strokeWidth={16}
+                strokeWidth={i === active ? 22 : 16}
                 strokeDasharray={`${dash} ${circumference - dash}`}
                 strokeDashoffset={-offset}
                 transform="rotate(-90)"
@@ -329,6 +347,7 @@ export function DonutChart(props: ChartProps) {
           })}
         </g>
       </svg>
+      {data[active] ? <ChartTooltip label={data[active].label} value={data[active].value} /> : null}
     </ChartFrame>
   );
 }

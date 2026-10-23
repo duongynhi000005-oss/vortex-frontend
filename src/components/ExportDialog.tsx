@@ -15,6 +15,8 @@ import {
   type ExportFormat,
 } from "@/lib/export/serialize";
 import { buildIntentsCsv } from "@/lib/csv";
+import { WEEK_MS, isReminderDue, loadExportConfig, saveExportConfig } from "@/lib/export/reminder";
+import { useToastStore } from "@/store/toast";
 import type { FeedItem } from "@/lib/types";
 
 const NETWORK = process.env["NEXT_PUBLIC_NETWORK"] ?? "testnet";
@@ -35,6 +37,7 @@ export function ExportDialog({ items, filenameBase }: Props) {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [template, setTemplate] = useState(`${filenameBase}-{date}`);
+  const [remind, setRemind] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const jobRef = useRef<ExportJob | null>(null);
@@ -45,6 +48,32 @@ export function ExportDialog({ items, filenameBase }: Props) {
     triggerRef,
   });
   const { copy, copied } = useCopyToClipboard();
+
+  // Restore the last-used configuration for this scope after mount (localStorage is client-only).
+  useEffect(() => {
+    const saved = loadExportConfig(filenameBase);
+    if (!saved) return;
+    setFormat(saved.format);
+    setColumns(EXPORT_COLUMNS.filter((c) => saved.columns.includes(c)));
+    setFrom(saved.from);
+    setTo(saved.to);
+    setTemplate(saved.template);
+    setRemind(saved.remindAt !== null);
+  }, [filenameBase]);
+
+  // In-tab reminder: a toast prompts the user to re-run; nothing exports in the background.
+  useEffect(() => {
+    if (!remind) return;
+    const check = () => {
+      const saved = loadExportConfig(filenameBase);
+      if (!saved || !isReminderDue(saved.remindAt, Date.now())) return;
+      saveExportConfig(filenameBase, { ...saved, remindAt: Date.now() + WEEK_MS });
+      useToastStore.getState().addToast("Time for your weekly export. Open Export to re-run it with your saved settings.", "info");
+    };
+    check();
+    const timer = setInterval(check, 60_000);
+    return () => clearInterval(timer);
+  }, [remind, filenameBase]);
 
   const rows = useMemo(() => filterByDateRange(items, from || undefined, to || undefined), [items, from, to]);
   const running = progress !== null;
@@ -71,6 +100,7 @@ export function ExportDialog({ items, filenameBase }: Props) {
     setError(null);
     setProgress({ done: 0, total: rows.length });
     const now = new Date();
+    saveExportConfig(filenameBase, { format, columns, from, to, template, remindAt: remind ? now.getTime() + WEEK_MS : null });
     const job = startExport(
       rows,
       { format, columns, meta: { network: NETWORK, generatedAt: now.toISOString() } },
@@ -151,6 +181,11 @@ export function ExportDialog({ items, filenameBase }: Props) {
             <label className="flex flex-col gap-1">
               {t("export.filename")}
               <input value={template} onChange={(e) => setTemplate(e.target.value)} className="bg-vx-surface border border-vx-border rounded-md px-2 py-1 text-vx-text" />
+            </label>
+
+            <label className="flex items-center gap-1.5">
+              <input type="checkbox" checked={remind} onChange={(e) => setRemind(e.target.checked)} />
+              Remind me weekly
             </label>
 
             <p>{t("export.estimate", { count: String(rows.length) })}</p>
