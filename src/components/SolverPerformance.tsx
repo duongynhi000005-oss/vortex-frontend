@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { BarChart } from "@/components/charts/BarChart";
+import { BarChart } from "@/components/charts";
 import { IntentStatusBadge } from "@/components/IntentStatusBadge";
 import { useTranslation } from "@/lib/i18n/I18nProvider";
 import {
@@ -93,20 +93,11 @@ export function SolverPerformance({ fills, avgFillTimeSeconds, now }: SolverPerf
           <div className="grid gap-4 sm:grid-cols-2">
             <BarChart
               title={t("solverDetail.perf.fillsChart")}
-              valueLabel={t("solverDetail.perf.fills")}
-              data={stats.series.map((b) => ({ label: b.start, value: b.fills }))}
-              showTableLabel={t("chart.showTable")}
-              hideTableLabel={t("chart.hideTable")}
-              emptyLabel={t("chart.empty")}
+              series={[{ name: t("solverDetail.perf.fills"), data: stats.series.map((b) => ({ label: b.start, value: b.fills })) }]}
             />
             <BarChart
               title={t("solverDetail.perf.successChart")}
-              valueLabel={t("solverDetail.perf.successRate")}
-              data={stats.series.map((b) => ({ label: b.start, value: b.successRatePct }))}
-              formatValue={(v) => `${v}%`}
-              showTableLabel={t("chart.showTable")}
-              hideTableLabel={t("chart.hideTable")}
-              emptyLabel={t("chart.empty")}
+              series={[{ name: t("solverDetail.perf.successRate"), data: stats.series.map((b) => ({ label: b.start, value: b.successRatePct ?? 0 })) }]}
             />
           </div>
         )}

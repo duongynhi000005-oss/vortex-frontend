@@ -16,7 +16,7 @@ All metrics are pure functions over validated `FeedItem`/`Solver` data, so they 
 - **ISO weeks:** `isoWeekKey` follows ISO 8601: weeks start on Monday, and week 1 is the week that contains the year's first Thursday. So 2021-01-01 falls in `2020-W53`, and 2024-12-30 falls in `2025-W01`. The previous day-of-year ÷ 7 approximation was replaced.
 - `computeSolverStats(fills, window)`: totals, success rate (`filled / (filled + failed)`) and a zero-filled series. The series uses daily buckets for 7 and 30 days, and weekly buckets for 90 days. With fewer than 5 fills in the window, `insufficientData` is set and the charts are replaced by an explicit message.
 - **Average fill time:** only the relay's all-time aggregate (`Solver.avgFillTimeSeconds`) is available. A per-window value needs server aggregation, which is out of scope.
-- **Charts:** `components/charts/BarChart` renders a decorative SVG. The values are always available in a data table, which assistive tech can read and sighted users can toggle.
+- **Charts:** `BarChart` from `components/charts` renders a keyboard-navigable SVG (arrow keys, Home/End). The values are always available in a data table that sighted users can toggle.
 
 ## Dashboard
 
