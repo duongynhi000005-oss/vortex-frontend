@@ -16,6 +16,7 @@ import { Nav } from "@/components/Nav";
 import { ConnectWalletButton } from "@/components/ConnectWalletButton";
 import { VotePanel } from "@/components/VotePanel";
 import { VotingPowerPanel } from "@/components/VotingPowerPanel";
+import { QuorumProgress } from "@/components/QuorumProgress";
 import { useWalletStore } from "@/store/wallet";
 import { useProposal, useProposalComments } from "@/hooks/useGovernance";
 import { useVotingPower } from "@/hooks/useVotingPower";
@@ -485,6 +486,7 @@ export default function ProposalDetailClient({ proposalId }: { proposalId: strin
               <div className="text-lg font-bold text-vx-amber num">{proposal.votesAgainst.toLocaleString()}</div>
             </div>
           </div>
+          <QuorumProgress proposal={proposal} />
         </div>
 
         {/* ── Community Discussion / Comment Thread Section ── */}
