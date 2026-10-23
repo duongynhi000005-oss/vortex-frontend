@@ -271,3 +271,29 @@ export function createSyncedPersist<
     return state;
   };
 }
+
+
+/**
+ * Safely parse JSON from localStorage with fallback.
+ */
+export function loadJSON<T>(key: string, fallback: T): T {
+  if (typeof window === "undefined" || typeof localStorage === "undefined") return fallback;
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+/**
+ * Safely stringify and write JSON to localStorage.
+ */
+export function saveJSON<T>(key: string, value: T): void {
+  if (typeof window === "undefined" || typeof localStorage === "undefined") return;
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Ignore storage quota / access errors
+  }
+}

@@ -321,3 +321,5 @@ export function translate(
 export function createTranslator(locale: Locale): Translator {
   return (key, values) => translate(locale, key, values);
 }
+
+export { useTranslation, useLocale, useSetLocale, I18nProvider } from "./I18nProvider";

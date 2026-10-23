@@ -91,4 +91,8 @@ export const es = {
   "governance.quorum.passing": "Aprobada",
   "governance.quorum.failing": "No aprobada",
   "governance.quorum.abstain": "Votos de abstención",
+  "notifications.slaBreach.title": "Umbral de SLA superado",
+  "notifications.slaBreach.p50": "El tiempo de llenado p50 superó el SLA ({value}s > {threshold}s)",
+  "notifications.slaBreach.p90": "El tiempo de llenado p90 superó el SLA ({value}s > {threshold}s)",
+  "notifications.slaBreach.p99": "El tiempo de llenado p99 superó el SLA ({value}s > {threshold}s)",
 } as const satisfies Record<keyof typeof import("./en").en, string>;

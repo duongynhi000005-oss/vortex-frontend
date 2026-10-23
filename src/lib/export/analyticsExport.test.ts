@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   buildShareUrl,
   encodeShareState,
+  decodeShareState,
+  readShareStateFromUrl,
+  SHARE_PARAM,
   type AnalyticsShareState,
 } from "./analyticsExport";
 
@@ -61,5 +64,72 @@ describe("analytics share URL privacy policy", () => {
     expect(looksLikeStellarKeyOrXdr(s)).toBe(true);
     expect(looksLikeStellarKeyOrXdr("AAAAAgAAAAC12345678")).toBe(true);
     expect(looksLikeStellarKeyOrXdr("USDC")).toBe(false);
+  });
+});
+
+describe("Analytics Share Link State Restoration (#601)", () => {
+  const sampleState: AnalyticsShareState = {
+    chain: "ethereum",
+    token: "USDC",
+    from: "2025-01-01",
+    to: "2025-01-31",
+  };
+
+  it("round-trips state accurately through encodeShareState and decodeShareState", () => {
+    const encoded = encodeShareState(sampleState);
+    const decoded = decodeShareState(encoded);
+    expect(decoded).toEqual(sampleState);
+  });
+
+  it("extracts and decodes share state from a relative query string via readShareStateFromUrl", () => {
+    const encoded = encodeShareState(sampleState);
+    const queryString = `?${SHARE_PARAM}=${encoded}`;
+
+    const restored = readShareStateFromUrl(queryString);
+    expect(restored).toEqual(sampleState);
+  });
+
+  it("extracts and decodes share state from a full URL string via readShareStateFromUrl", () => {
+    const encoded = encodeShareState({ chain: "base", token: "WETH" });
+    const fullUrl = `https://vortex.app/analytics?tab=overview&${SHARE_PARAM}=${encoded}#charts`;
+
+    const restored = readShareStateFromUrl(fullUrl);
+    expect(restored).toEqual({ chain: "base", token: "WETH" });
+  });
+
+  it("generates a shareable URL containing the encoded state via buildShareUrl", () => {
+    const url = buildShareUrl(sampleState, "https://app.vortex.finance/analytics");
+    expect(url).toContain(`${SHARE_PARAM}=`);
+
+    const parsed = readShareStateFromUrl(url);
+    expect(parsed).toEqual(sampleState);
+  });
+
+  it("returns null when the share parameter is missing or empty", () => {
+    expect(readShareStateFromUrl("")).toBeNull();
+    expect(readShareStateFromUrl("?foo=bar")).toBeNull();
+    expect(readShareStateFromUrl(`?${SHARE_PARAM}=`)).toBeNull();
+  });
+
+  it("safely handles corrupted or tampered Base64 payloads without throwing", () => {
+    expect(readShareStateFromUrl(`?${SHARE_PARAM}=not-valid-base64!@#$`)).toBeNull();
+    expect(readShareStateFromUrl(`?${SHARE_PARAM}=${btoa("not-json")}`)).toBeNull();
+    expect(readShareStateFromUrl(`?${SHARE_PARAM}=${btoa(JSON.stringify(["array-not-object"]))}`)).toBeNull();
+  });
+
+  it("rejects payloads with disallowed or unauthorized properties", () => {
+    const maliciousJson = JSON.stringify({ c: "ethereum", maliciousProperty: "injected" });
+    const encoded = btoa(maliciousJson);
+
+    expect(readShareStateFromUrl(`?${SHARE_PARAM}=${encoded}`)).toBeNull();
+  });
+
+  it("rejects payloads attempting to leak Stellar addresses or private keys", () => {
+    const leakedAddress = "G" + "A".repeat(55);
+    const payload = JSON.stringify({ c: leakedAddress });
+    const encoded = btoa(payload);
+
+    // Should drop the invalid / sensitive value
+    expect(readShareStateFromUrl(`?${SHARE_PARAM}=${encoded}`)).toEqual({});
   });
 });

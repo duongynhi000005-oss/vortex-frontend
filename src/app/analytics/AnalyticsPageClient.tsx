@@ -22,12 +22,19 @@ import {
   type SlaPanelData,
 } from "@/lib/analytics";
 import { CHAINS } from "@/lib/marketData";
-import { buildAnalyticsCsvBundle, buildShareUrl } from "@/lib/export/analyticsExport";
+import {
+  buildAnalyticsCsvBundle,
+  buildShareUrl,
+  readShareStateFromUrl,
+  SHARE_PARAM,
+  type AnalyticsShareState,
+} from "@/lib/export/analyticsExport";
 import { downloadBlob, svgToPng } from "@/lib/export/svgToPng";
 import { downloadCsv } from "@/lib/csv";
 import { secureLogger } from "@/lib/secureLogging";
 import { useTranslation } from "@/lib/i18n/I18nProvider";
 import { Tooltip } from "@/components/Tooltip";
+import { useSlaBreachAlert } from "@/hooks/useSlaBreachAlert";
 
 // ─── Inline format helper ─────────────────────────────────────────────────────
 
@@ -315,18 +322,6 @@ function BarList({
   return (
     <div className="space-y-3">
       {items.length === 0 ? (
-        <div className="text-sm text-vx-muted">No distribution data available.</div>
-      ) : (
-        items.map((item) => (
-          <div key={item.label} className="space-y-1.5">
-            <div className="flex items-center justify-between gap-3 text-xs text-vx-muted">
-              <span className="truncate">
-                {formatLab
-  const maxValue = Math.max(...items.map((item) => item.value), 1);
-
-  return (
-    <div className="space-y-3">
-      {items.length === 0 ? (
         <div className="text-sm text-vx-muted">{t("analytics.bars.empty")}</div>
       ) : (
         items.map((item) => (
@@ -455,6 +450,7 @@ function useAnalyticsWorker(intents: Parameters<typeof computeAnalytics>[0]) {
 // ─── SLA Panel (issue #465) ───────────────────────────────────────────────────
 
 function SlaPanel({ data }: { data: SlaPanelData }) {
+  useSlaBreachAlert(data);
   const { percentiles, histogram, sla, filledCount, pendingCount, clampedCount, successRateMovingAvg } = data;
 
   if (filledCount === 0) {
@@ -582,7 +578,209 @@ function SlaPanel({ data }: { data: SlaPanelData }) {
   );
 }
 
-// ─── Route Flow / Sankey (issue #464) ─────────────────────────────────────────
+// ─── Route Flow SVG Sankey (issue #464 & #603) ─────────────────────────────────
+
+function RouteFlowSankeySvg({
+  chainNodes,
+  tokenNodes,
+  links,
+  totalValue,
+  chainMeta,
+  focusedId,
+  setFocusedId,
+  onExploreClick,
+  t,
+}: {
+  chainNodes: { id: string; label: string; color: string; totalValue?: number; value?: number }[];
+  tokenNodes: { id: string; label: string; color: string; totalValue?: number; value?: number }[];
+  links: { sourceId: string; targetId: string; value: number; count: number }[];
+  totalValue: number;
+  chainMeta: Record<string, { id: string; name: string; color: string }>;
+  focusedId: string | null;
+  setFocusedId: (id: string | null) => void;
+  onExploreClick: (chainId: string, tokenSymbol: string) => void;
+  t: (key: any) => string;
+}) {
+  const width = 640;
+  const height = 220;
+  const paddingY = 20;
+  const x0 = 80;
+  const x1 = 540;
+  const nodeW = 14;
+  const gap = 10;
+
+  const getNodeVal = (node?: { totalValue?: number; value?: number }) =>
+    node?.totalValue ?? node?.value ?? 0;
+
+  const sumChain = Math.max(1, chainNodes.reduce((s, n) => s + getNodeVal(n), 0));
+  const sumToken = Math.max(1, tokenNodes.reduce((s, n) => s + getNodeVal(n), 0));
+
+  const availHChains = Math.max(40, height - paddingY * 2 - (chainNodes.length - 1) * gap);
+  const availHTokens = Math.max(40, height - paddingY * 2 - (tokenNodes.length - 1) * gap);
+
+  // Compute node rectangles
+  let curYChain = paddingY;
+  const chainLayouts = new Map<string, { x: number; y: number; w: number; h: number; curY: number }>();
+  chainNodes.forEach((node) => {
+    const val = getNodeVal(node);
+    const h = Math.max(14, (val / sumChain) * availHChains);
+    chainLayouts.set(node.id, { x: x0, y: curYChain, w: nodeW, h, curY: curYChain });
+    curYChain += h + gap;
+  });
+
+  let curYToken = paddingY;
+  const tokenLayouts = new Map<string, { x: number; y: number; w: number; h: number; curY: number }>();
+  tokenNodes.forEach((node) => {
+    const val = getNodeVal(node);
+    const h = Math.max(14, (val / sumToken) * availHTokens);
+    tokenLayouts.set(node.id, { x: x1, y: curYToken, w: nodeW, h, curY: curYToken });
+    curYToken += h + gap;
+  });
+
+  // Compute flow ribbon paths
+  const ribbonPaths = links.map((link) => {
+    const src = chainLayouts.get(link.sourceId);
+    const dst = tokenLayouts.get(link.targetId);
+    if (!src || !dst) return null;
+
+    const srcNode = chainNodes.find((n) => n.id === link.sourceId);
+    const dstNode = tokenNodes.find((n) => n.id === link.targetId);
+
+    const srcVal = getNodeVal(srcNode);
+    const dstVal = getNodeVal(dstNode);
+
+    const hSrc = srcVal > 0 ? Math.max(2, (link.value / srcVal) * src.h) : 2;
+    const hDst = dstVal > 0 ? Math.max(2, (link.value / dstVal) * dst.h) : 2;
+
+    const y0Top = src.curY;
+    const y0Bot = y0Top + hSrc;
+    src.curY += hSrc;
+
+    const y1Top = dst.curY;
+    const y1Bot = y1Top + hDst;
+    dst.curY += hDst;
+
+    const startX = src.x + src.w;
+    const endX = dst.x;
+    const dx = (endX - startX) * 0.5;
+
+    const d = `M ${startX} ${y0Top} C ${startX + dx} ${y0Top}, ${endX - dx} ${y1Top}, ${endX} ${y1Top} L ${endX} ${y1Bot} C ${endX - dx} ${y1Bot}, ${startX + dx} ${y0Bot}, ${startX} ${y0Bot} Z`;
+
+    const chainId = link.sourceId.replace("chain:", "");
+    const tokenSymbol = dstNode?.label ?? "";
+    const isFocused = focusedId === `${link.sourceId}→${link.targetId}`;
+
+    return {
+      id: `${link.sourceId}→${link.targetId}`,
+      d,
+      color: srcNode?.color ?? "#4CEBA8",
+      label: `${srcNode?.label ?? chainId} → ${tokenSymbol}: ${formatUsd(link.value)} across ${link.count} intent(s)`,
+      chainId,
+      tokenSymbol,
+      isFocused,
+    };
+  }).filter(Boolean);
+
+  return (
+    <svg
+      viewBox={`0 0 ${width} ${height}`}
+      className="w-full h-auto min-h-[220px]"
+      role="img"
+      aria-label={t("analytics.routeFlow.diagramAria") || "Route flow Sankey diagram"}
+    >
+      <defs>
+        <filter id="glow" x="-10%" y="-10%" width="120%" height="120%">
+          <feDropShadow dx="0" dy="1" stdDeviation="2" floodColor="#000000" floodOpacity="0.3" />
+        </filter>
+      </defs>
+
+      {/* Ribbons */}
+      <g className="ribbons">
+        {ribbonPaths.map((ribbon) => (
+          <path
+            key={ribbon!.id}
+            d={ribbon!.d}
+            fill={ribbon!.color}
+            fillOpacity={ribbon!.isFocused ? 0.8 : 0.35}
+            stroke={ribbon!.color}
+            strokeWidth={ribbon!.isFocused ? 1.5 : 0.5}
+            strokeOpacity={ribbon!.isFocused ? 0.9 : 0.3}
+            className="cursor-pointer transition-all duration-200"
+            onMouseEnter={() => setFocusedId(ribbon!.id)}
+            onMouseLeave={() => setFocusedId(null)}
+            onClick={() => onExploreClick(ribbon!.chainId, ribbon!.tokenSymbol)}
+          >
+            <title>{ribbon!.label}</title>
+          </path>
+        ))}
+      </g>
+
+      {/* Source chain nodes */}
+      <g className="chain-nodes">
+        {chainNodes.map((node) => {
+          const layout = chainLayouts.get(node.id);
+          if (!layout) return null;
+          const chainId = node.id.replace("chain:", "");
+          const name = chainMeta[chainId]?.name ?? node.label;
+          return (
+            <g key={node.id} className="cursor-pointer" onClick={() => onExploreClick(chainId, "")}>
+              <rect
+                x={layout.x}
+                y={layout.y}
+                width={layout.w}
+                height={layout.h}
+                rx={3}
+                fill={node.color}
+                filter="url(#glow)"
+              />
+              <text
+                x={layout.x - 8}
+                y={layout.y + layout.h / 2 + 4}
+                textAnchor="end"
+                fill="currentColor"
+                fontSize="11"
+                className="fill-vx-text font-medium"
+              >
+                {name}
+              </text>
+            </g>
+          );
+        })}
+      </g>
+
+      {/* Destination token nodes */}
+      <g className="token-nodes">
+        {tokenNodes.map((node) => {
+          const layout = tokenLayouts.get(node.id);
+          if (!layout) return null;
+          return (
+            <g key={node.id}>
+              <rect
+                x={layout.x}
+                y={layout.y}
+                width={layout.w}
+                height={layout.h}
+                rx={3}
+                fill={node.color}
+                filter="url(#glow)"
+              />
+              <text
+                x={layout.x + layout.w + 8}
+                y={layout.y + layout.h / 2 + 4}
+                textAnchor="start"
+                fill="currentColor"
+                fontSize="11"
+                className="fill-vx-text font-medium"
+              >
+                {node.label}
+              </text>
+            </g>
+          );
+        })}
+      </g>
+    </svg>
+  );
+}
 
 function RouteFlowPanel({
   sankeyData,
@@ -591,9 +789,11 @@ function RouteFlowPanel({
   sankeyData: SankeyData;
   chainMeta: Record<string, { id: string; name: string; color: string }>;
 }) {
+  const { t } = useTranslation();
   const [minVolumeThreshold, setMinVolumeThreshold] = useState(0);
   const [showTable, setShowTable] = useState(false);
   const [focusedId, setFocusedId] = useState<string | null>(null);
+  const flowChartRef = useRef<HTMLDivElement>(null);
 
   const { nodes, links, totalValue } = sankeyData;
 
@@ -621,8 +821,31 @@ function RouteFlowPanel({
     (chainId: string, tokenSymbol: string) => {
       const params = new URLSearchParams();
       params.set("chain", chainId);
-      params.set("q", `token:${tokenSymbol}`);
+      if (tokenSymbol) params.set("q", `token:${tokenSymbol}`);
       window.location.href = `/explore?${params.toString()}`;
+    },
+    [],
+  );
+
+  const handlePngExport = useCallback(
+    async (forcedTheme?: "light" | "dark") => {
+      const svgEl = flowChartRef.current?.querySelector("svg");
+      if (!svgEl) {
+        secureLogger.warn("Route flow PNG export: no SVG element found in flow container");
+        return;
+      }
+      try {
+        const isLight =
+          typeof document !== "undefined" &&
+          document.documentElement.getAttribute("data-theme") === "light";
+        const activeTheme = forcedTheme ?? (isLight ? "light" : "dark");
+        const bg = activeTheme === "light" ? "#ffffff" : "#0f1117";
+        const blob = await svgToPng(svgEl as SVGSVGElement, { background: bg });
+        const today = new Date().toISOString().slice(0, 10);
+        downloadBlob(blob, `vortex-route-flow-${today}.png`);
+      } catch (err) {
+        secureLogger.error("Route flow PNG export failed", err);
+      }
     },
     [],
   );
@@ -633,10 +856,10 @@ function RouteFlowPanel({
 
   return (
     <div className="space-y-4">
-      {/* Threshold slider */}
+      {/* Threshold slider and actions */}
       <div className="flex flex-wrap items-center gap-3 text-xs text-vx-muted">
         <label htmlFor="vol-threshold" className="shrink-0">
-          Min. volume threshold:
+          {t("analytics.routeFlow.threshold") || "Min. volume threshold:"}
         </label>
         <input
           id="vol-threshold"
@@ -650,100 +873,144 @@ function RouteFlowPanel({
           aria-label="Minimum volume threshold to show a route"
         />
         <span className="num">{formatUsd(minVolumeThreshold)}</span>
-        <button
-          type="button"
-          onClick={() => setShowTable((v) => !v)}
-          className="ml-auto rounded border border-vx-border bg-vx-surface px-2 py-1 text-xs hover:bg-vx-surface/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-vx-accent"
-          aria-pressed={showTable}
-        >
-          {showTable ? "Hide table" : "Show table"}
-        </button>
+
+        <div className="ml-auto flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowTable((v) => !v)}
+            className="rounded border border-vx-border bg-vx-surface px-2 py-1 text-xs hover:bg-vx-surface/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-vx-accent"
+            aria-pressed={showTable}
+          >
+            {showTable
+              ? (t("analytics.routeFlow.hideTable") || "Hide table")
+              : (t("analytics.routeFlow.showTable") || "Show table")}
+          </button>
+          <button
+            type="button"
+            onClick={() => handlePngExport()}
+            className="rounded border border-vx-border bg-vx-surface px-2 py-1 text-xs hover:bg-vx-surface/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-vx-accent flex items-center gap-1.5"
+            aria-label={t("analytics.routeFlow.exportPng") || "Export as PNG"}
+          >
+            <svg
+              className="h-3 w-3"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth="2"
+              aria-hidden="true"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+              />
+            </svg>
+            <span>{t("analytics.routeFlow.exportPng") || "Export as PNG"}</span>
+          </button>
+        </div>
       </div>
 
-      {/* Heatmap / matrix */}
+      {/* Visual Sankey Diagram & Matrix */}
       {!showTable && (
-        <div
-          className="overflow-x-auto"
-          role="img"
-          aria-label="Route flow heatmap: source chains vs destination tokens"
-        >
-          <table className="border-separate border-spacing-1 text-xs">
-            <thead>
-              <tr>
-                <th className="text-left text-vx-muted pr-2 font-normal">
-                  <span className="sr-only">Source chain</span>
-                </th>
-                {tokenNodes.map((tn) => (
-                  <th
-                    key={tn.id}
-                    className="text-center text-vx-muted font-normal pb-1 px-1"
-                    scope="col"
-                    style={{ color: tn.color }}
-                  >
-                    {tn.label}
+        <div className="space-y-4">
+          <div ref={flowChartRef} className="overflow-x-auto rounded-lg border border-vx-border/40 bg-vx-surface/30 p-3">
+            <RouteFlowSankeySvg
+              chainNodes={chainNodes}
+              tokenNodes={tokenNodes}
+              links={filteredLinks}
+              totalValue={totalValue}
+              chainMeta={chainMeta}
+              focusedId={focusedId}
+              setFocusedId={setFocusedId}
+              onExploreClick={handleExploreClick}
+              t={t}
+            />
+          </div>
+
+          {/* Matrix heatmap view */}
+          <div
+            className="overflow-x-auto"
+            role="img"
+            aria-label="Route flow heatmap: source chains vs destination tokens"
+          >
+            <table className="border-separate border-spacing-1 text-xs">
+              <thead>
+                <tr>
+                  <th className="text-left text-vx-muted pr-2 font-normal">
+                    <span className="sr-only">Source chain</span>
                   </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {heatmapRows.map(({ chainNode, cells }) => (
-                <tr key={chainNode.id}>
-                  <th
-                    scope="row"
-                    className="text-left text-vx-muted font-normal pr-2 whitespace-nowrap"
-                    style={{ color: chainNode.color }}
-                  >
-                    {chainMeta[chainNode.id.replace("chain:", "")]?.name ??
-                      chainNode.label}
-                  </th>
-                  {cells.map(({ tokenNode, link }) => {
-                    const opacity = link
-                      ? 0.15 + (link.value / maxCellValue) * 0.85
-                      : 0;
-                    const isFocused =
-                      focusedId === `${chainNode.id}→${tokenNode.id}`;
-                    return (
-                      <td key={tokenNode.id} className="p-0">
-                        {link ? (
-                          <Tooltip
-                            content={`${chainNode.label} → ${tokenNode.label}: ${formatUsd(link.value)} across ${link.count} intent(s) (${((link.value / totalValue) * 100).toFixed(1)}%)`}
-                          >
-                            <button
-                              type="button"
-                              className={`h-8 w-14 rounded transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-vx-accent ${isFocused ? "ring-2 ring-vx-accent" : ""}`}
-                              style={{
-                                background: chainNode.color,
-                                opacity,
-                              }}
-                              onFocus={() =>
-                                setFocusedId(`${chainNode.id}→${tokenNode.id}`)
-                              }
-                              onBlur={() => setFocusedId(null)}
-                              onClick={() =>
-                                handleExploreClick(
-                                  chainNode.id.replace("chain:", ""),
-                                  tokenNode.label,
-                                )
-                              }
-                              aria-label={`${chainNode.label} to ${tokenNode.label}: ${formatUsd(link.value)}, ${link.count} intent(s). Click to explore.`}
-                            />
-                          </Tooltip>
-                        ) : (
-                          <div
-                            className="h-8 w-14 rounded"
-                            style={{
-                              background: "rgba(255,255,255,0.04)",
-                            }}
-                            aria-hidden="true"
-                          />
-                        )}
-                      </td>
-                    );
-                  })}
+                  {tokenNodes.map((tn) => (
+                    <th
+                      key={tn.id}
+                      className="text-center text-vx-muted font-normal pb-1 px-1"
+                      scope="col"
+                      style={{ color: tn.color }}
+                    >
+                      {tn.label}
+                    </th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {heatmapRows.map(({ chainNode, cells }) => (
+                  <tr key={chainNode.id}>
+                    <th
+                      scope="row"
+                      className="text-left text-vx-muted font-normal pr-2 whitespace-nowrap"
+                      style={{ color: chainNode.color }}
+                    >
+                      {chainMeta[chainNode.id.replace("chain:", "")]?.name ??
+                        chainNode.label}
+                    </th>
+                    {cells.map(({ tokenNode, link }) => {
+                      const opacity = link
+                        ? 0.15 + (link.value / maxCellValue) * 0.85
+                        : 0;
+                      const isFocused =
+                        focusedId === `${chainNode.id}→${tokenNode.id}`;
+                      return (
+                        <td key={tokenNode.id} className="p-0">
+                          {link ? (
+                            <Tooltip
+                              content={`${chainNode.label} → ${tokenNode.label}: ${formatUsd(link.value)} across ${link.count} intent(s) (${((link.value / totalValue) * 100).toFixed(1)}%)`}
+                            >
+                              <button
+                                type="button"
+                                className={`h-8 w-14 rounded transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-vx-accent ${isFocused ? "ring-2 ring-vx-accent" : ""}`}
+                                style={{
+                                  background: chainNode.color,
+                                  opacity,
+                                }}
+                                onFocus={() =>
+                                  setFocusedId(`${chainNode.id}→${tokenNode.id}`)
+                                }
+                                onBlur={() => setFocusedId(null)}
+                                onClick={() =>
+                                  handleExploreClick(
+                                    chainNode.id.replace("chain:", ""),
+                                    tokenNode.label,
+                                  )
+                                }
+                                aria-label={`${chainNode.label} to ${tokenNode.label}: ${formatUsd(link.value)}, ${link.count} intent(s). Click to explore.`}
+                              />
+                            </Tooltip>
+                          ) : (
+                            <div
+                              className="h-8 w-14 rounded"
+                              style={{
+                                background: "rgba(255,255,255,0.04)",
+                              }}
+                              aria-hidden="true"
+                            />
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
@@ -798,8 +1065,8 @@ function RouteFlowPanel({
       )}
     </div>
   );
-}
-
+}
+
 // ─── Export menu (issue #466) ─────────────────────────────────────────────────
 
 function ExportMenu({
@@ -875,6 +1142,94 @@ function ExportMenu({
   );
 }
 
+// ─── Issue #468 helper components ─────────────────────────────────────────────
+
+function StackedAreaChart({
+  seriesData,
+  entities,
+  colors,
+  normalized,
+}: {
+  seriesData: ShareSeriesPoint[];
+  entities: string[];
+  colors: Record<string, string>;
+  normalized: boolean;
+}) {
+  if (seriesData.length === 0) {
+    return <div className="text-sm text-vx-muted">No market-share trend data available.</div>;
+  }
+  return (
+    <div className="space-y-4">
+      <div className="h-48 w-full overflow-hidden rounded bg-vx-surface/40 p-2 flex items-center justify-center text-xs text-vx-muted">
+        <svg viewBox="0 0 600 160" className="w-full h-full" role="img" aria-label="Market share trends chart">
+          <g>
+            {entities.map((entity, i) => (
+              <text key={entity} x={20 + i * 100} y={20} fill={colors[entity] ?? "#4CEBA8"} fontSize="11">
+                {entity}
+              </text>
+            ))}
+          </g>
+        </svg>
+      </div>
+      <div className="flex flex-wrap gap-3 text-xs text-vx-muted">
+        {entities.map((entity) => (
+          <div key={entity} className="flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full" style={{ background: colors[entity] ?? "#4CEBA8" }} />
+            <span>{entity}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TopMoversPanel({ movers }: { movers: TopMover[] }) {
+  if (movers.length === 0) {
+    return <div className="text-sm text-vx-muted">No share shifts detected.</div>;
+  }
+  return (
+    <div className="space-y-2">
+      {movers.slice(0, 5).map((m) => (
+        <div key={m.label} className="flex items-center justify-between text-xs py-1 border-b border-vx-border/40">
+          <div className="flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full" style={{ background: m.color }} />
+            <span className="font-medium text-vx-text">{m.label}</span>
+          </div>
+          <div className="flex items-center gap-3 num">
+            <span className="text-vx-muted">{m.currentSharePct}%</span>
+            <span className={m.deltaSharePct >= 0 ? "text-vx-accent" : "text-vx-dim"}>
+              {m.deltaSharePct >= 0 ? `▲ +${m.deltaSharePct}%` : `▼ ${m.deltaSharePct}%`}
+            </span>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ConcentrationIndicator({ result }: { result: ConcentrationResult }) {
+  return (
+    <div className="space-y-3 text-xs">
+      <div className="flex items-center justify-between">
+        <span className="text-vx-muted">HHI Index</span>
+        <Tooltip content={`Herfindahl–Hirschman Index: ${result.hhi} (${result.level})`}>
+          <span className="font-semibold num text-vx-text">{result.hhi} ({result.level})</span>
+        </Tooltip>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="rounded bg-vx-surface/60 p-2.5 border border-vx-border/60">
+          <div className="text-vx-dim">Top-1 Share</div>
+          <div className="text-base font-semibold text-vx-text num mt-1">{result.top1SharePct}%</div>
+        </div>
+        <div className="rounded bg-vx-surface/60 p-2.5 border border-vx-border/60">
+          <div className="text-vx-dim">Top-3 Share</div>
+          <div className="text-base font-semibold text-vx-text num mt-1">{result.top3SharePct}%</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function AnalyticsPageClient() {
@@ -882,22 +1237,49 @@ export default function AnalyticsPageClient() {
   const { intents, isLoading, error } = useLiveIntents();
   const chartRef = useRef<HTMLDivElement>(null);
 
-  const workerSnapshot = useAnalyticsWorker(intents);
-  const fallbackAnalytics = useMemo(
-    () => (workerSnapshot ? null : computeAnalytics(intents)),
-    [workerSnapshot, intents],
-  );
-  const analytics = workerSnapshot ?? fallbackAnalytics!;
-  const deferredAnalytics = useDeferredValue(ana
-export default function AnalyticsPageClient() {
-  const { t } = useTranslation();
-  const { intents, isLoading, error } = useLiveIntents();
-  const chartRef = useRef<HTMLDivElement>(null);
+  // Filter states restored from URL (#601)
+  const [selectedChain, setSelectedChain] = useState<string | null>(null);
+  const [selectedToken, setSelectedToken] = useState<string | null>(null);
+  const [dateFrom, setDateFrom] = useState<string | null>(null);
+  const [dateTo, setDateTo] = useState<string | null>(null);
 
-  const workerSnapshot = useAnalyticsWorker(intents);
+  useEffect(() => {
+    const shared = readShareStateFromUrl();
+    if (shared) {
+      if (shared.chain) setSelectedChain(shared.chain);
+      if (shared.token) setSelectedToken(shared.token);
+      if (shared.from) setDateFrom(shared.from);
+      if (shared.to) setDateTo(shared.to);
+    }
+  }, []);
+
+  const filteredIntents = useMemo(() => {
+    if (!selectedChain && !selectedToken && !dateFrom && !dateTo) {
+      return intents;
+    }
+    return intents.filter((intent) => {
+      if (selectedChain && intent.srcChain !== selectedChain) return false;
+      if (
+        selectedToken &&
+        intent.srcToken !== selectedToken &&
+        intent.dstToken !== selectedToken
+      ) {
+        return false;
+      }
+      if (dateFrom && new Date(intent.createdAt).getTime() < new Date(dateFrom).getTime()) {
+        return false;
+      }
+      if (dateTo && new Date(intent.createdAt).getTime() > new Date(dateTo).getTime()) {
+        return false;
+      }
+      return true;
+    });
+  }, [intents, selectedChain, selectedToken, dateFrom, dateTo]);
+
+  const workerSnapshot = useAnalyticsWorker(filteredIntents);
   const fallbackAnalytics = useMemo(
-    () => (workerSnapshot ? null : computeAnalytics(intents)),
-    [workerSnapshot, intents],
+    () => (workerSnapshot ? null : computeAnalytics(filteredIntents)),
+    [workerSnapshot, filteredIntents],
   );
   const analytics = workerSnapshot ?? fallbackAnalytics!;
   const deferredAnalytics = useDeferredValue(analytics);
@@ -918,21 +1300,31 @@ export default function AnalyticsPageClient() {
     [],
   );
 
+  const [dimension, setDimension] = useState<ShareDimension>("srcChain");
+  const [normalized, setNormalized] = useState(false);
+  const shareSeries = useMemo(() => computeShareSeries(filteredIntents, dimension), [filteredIntents, dimension]);
+  const concentration = useMemo(() => computeConcentration(filteredIntents, dimension), [filteredIntents, dimension]);
+  const topMovers = useMemo(() => computeTopMovers(filteredIntents, dimension), [filteredIntents, dimension]);
+
   const handleCsvExport = useCallback(() => {
     const today = new Date().toISOString().slice(0, 10);
-    const csv = buildAnalyticsCsvBundle(analytics, {
-      title: "Vortex Protocol Analytics",
-      range: analytics.datasetSince
-        ? `${analytics.datasetSince} – ${today}`
-        : today,
-      generatedAt: new Date().toISOString(),
-      network: "mainnet",
-      dataCompletenessNote: analytics.isCapped
-        ? `Partial dataset: latest ${analytics.datasetSize} intents only`
-        : "Full dataset loaded",
-    });
+    const csv = buildAnalyticsCsvBundle(
+      analytics,
+      {
+        title: "Vortex Protocol Analytics",
+        range: analytics.datasetSince
+          ? `${analytics.datasetSince} – ${today}`
+          : today,
+        generatedAt: new Date().toISOString(),
+        network: "mainnet",
+        dataCompletenessNote: analytics.isCapped
+          ? `Partial dataset: latest ${analytics.datasetSize} intents only`
+          : "Full dataset loaded",
+      },
+      { concentration, topMovers },
+    );
     downloadCsv(`vortex-analytics-${today}.csv`, csv);
-  }, [analytics]);
+  }, [analytics, concentration, topMovers]);
 
   const handlePngExport = useCallback(
     async (theme: "light" | "dark") => {
@@ -954,11 +1346,16 @@ export default function AnalyticsPageClient() {
   );
 
   const handleCopyLink = useCallback(() => {
-    const url = buildShareUrl({});
+    const state: AnalyticsShareState = {};
+    if (selectedChain) state.chain = selectedChain;
+    if (selectedToken) state.token = selectedToken;
+    if (dateFrom) state.from = dateFrom;
+    if (dateTo) state.to = dateTo;
+    const url = buildShareUrl(state);
     navigator.clipboard.writeText(url).catch((err) => {
       secureLogger.error("Failed to copy shareable link", err);
     });
-  }, []);
+  }, [selectedChain, selectedToken, dateFrom, dateTo]);
 
   if (isLoading && intents.length === 0) {
     return (
@@ -1020,6 +1417,55 @@ export default function AnalyticsPageClient() {
             onCopyLink={handleCopyLink}
           />
         </div>
+
+        {/* Active Shared Filters Banner (#601) */}
+        {(selectedChain || selectedToken || dateFrom || dateTo) && (
+          <div
+            className="mb-6 flex flex-wrap items-center gap-2 rounded-lg border border-vx-accent/30 bg-vx-accent/10 px-4 py-2.5 text-xs text-vx-text"
+            data-testid="active-filters-bar"
+            role="status"
+          >
+            <span className="font-semibold text-vx-accent">Active shared filters:</span>
+            {selectedChain && (
+              <span className="rounded bg-vx-surface px-2 py-0.5 border border-vx-border" data-testid="filter-badge-chain">
+                Chain: {chainMeta[selectedChain]?.name ?? selectedChain}
+              </span>
+            )}
+            {selectedToken && (
+              <span className="rounded bg-vx-surface px-2 py-0.5 border border-vx-border" data-testid="filter-badge-token">
+                Token: {selectedToken}
+              </span>
+            )}
+            {dateFrom && (
+              <span className="rounded bg-vx-surface px-2 py-0.5 border border-vx-border" data-testid="filter-badge-from">
+                From: {new Date(dateFrom).toLocaleDateString("en-US")}
+              </span>
+            )}
+            {dateTo && (
+              <span className="rounded bg-vx-surface px-2 py-0.5 border border-vx-border" data-testid="filter-badge-to">
+                To: {new Date(dateTo).toLocaleDateString("en-US")}
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedChain(null);
+                setSelectedToken(null);
+                setDateFrom(null);
+                setDateTo(null);
+                if (typeof window !== "undefined") {
+                  const url = new URL(window.location.href);
+                  url.searchParams.delete(SHARE_PARAM);
+                  window.history.replaceState({}, "", url.toString());
+                }
+              }}
+              className="ml-auto underline text-vx-dim hover:text-vx-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-vx-accent"
+              data-testid="clear-shared-filters-btn"
+            >
+              Reset filters
+            </button>
+          </div>
+        )}
 
         {/* Data-quality banner (issue #467) */}
         <div className="mb-6">
@@ -1234,8 +1680,6 @@ export default function AnalyticsPageClient() {
           </p>
           <div className="mt-4">
             <SlaPanel data={analytics.slaPanel} />
-          </div>
-        </div>
           </div>
         </div>
       </main>
