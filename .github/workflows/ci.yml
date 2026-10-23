@@ -100,6 +100,8 @@ jobs:
       - run: npm run check:dead-code
       - name: Typecheck (strict tsconfig, must be zero errors)
         run: npm run typecheck
+      - name: Typecheck stories (tsconfig.storybook.json)
+        run: npm run typecheck:storybook
       - run: npm run lint
       - run: npm run typecheck
 

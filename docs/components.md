@@ -1,60 +1,41 @@
 # Components
 
-This document describes the shared UI components used across the application.
+Shared UI components are documented in Storybook, not in this file. Component
+docs are generated from TSDoc and prop types through Storybook's `autodocs`
+tag, so they track the code. Components without a story are not yet covered;
+see `npm run check:stories`.
+
+## Browsing
+
+```sh
+npm run build:storybook   # outputs storybook-static/
+npx http-server storybook-static --port 6006
+```
+
+Open `http://127.0.0.1:6006` and pick a component under **Components** or
+**Charts** in the sidebar. The toolbar switches theme, locale, and viewport.
+
+## Authoring stories
+
+- Stories live next to the component as `<Name>.stories.tsx` and use CSF3.
+- Interaction tests go in a `play` function using `storybook/test`. They run
+  under the Storybook test runner in CI (`npm run test:storybook`).
+- Story files are excluded from the app build and from the strict
+  `tsconfig.json`. They are typechecked with `npm run typecheck:storybook`.
+- Run `npm run check:stories` to list shared components that still lack a
+  story file.
 
 ## Charts (`src/components/charts/*`)
 
-A small, dependency-free toolkit of accessible SVG chart primitives. All
-components are typed generics, use Tailwind palette tokens (light + dark), and
-share consistent scales, tooltips, legends, responsive sizing, reduced-motion
-support, and accessible alternatives.
+The chart primitives (`LineChart`, `AreaChart`, `BarChart`, `DonutChart`,
+`Sparkline`, `Legend`, `ChartTooltip`) are documented under **Charts** in
+Storybook. Their shared accessibility contract is:
 
-### Available components
-
-| Component | Description |
-| --- | --- |
-| `LineChart` | Line series with focusable, arrow-key navigable data points. |
-| `AreaChart` | Filled area series built on the same scale helpers as `LineChart`. |
-| `BarChart` | Band-scaled bars with pattern/marker supplements to colour. |
-| `DonutChart` | Categorical donut with a legend and per-slice markers. |
-| `Sparkline` | Compact inline trend line for dense layouts. |
-| `Legend` | Shared legend that pairs each series with a colour **and** a pattern/marker. |
-| `ChartTooltip` | Tooltip surface announced through an `aria-live` region. |
-
-### Accessibility
-
-- **Keyboard:** every data point is focusable and navigable with the arrow
-  keys. The active point's tooltip content is announced through an `aria-live`
-  region.
-- **Data-table fallback:** each chart exposes a "View as table" toggle that
-  renders the underlying data as an accessible `<table>`.
-- **Text summary:** each chart renders a short text summary referenced by
+- Every data point is keyboard-focusable and navigable with the arrow keys.
+- Each chart offers a "View as table" fallback and a text summary referenced by
   `aria-describedby`.
-- **Non-colour encodings:** patterns and markers supplement colour so states
-  are distinguishable without relying on colour alone (WCAG 1.4.1). Colours
-  meet 3:1 contrast against both the light and dark palettes.
+- Patterns and markers supplement colour (WCAG 1.4.1), with 3:1 contrast in
+  both palettes defined in `src/app/globals.css`.
 
-### Responsiveness and data handling
-
-- Charts measure their container with `ResizeObserver` and are SSR-safe.
-- Empty, single-point, and very large series (up to 10k points) are supported;
-  large series are downsampled with the LTTB algorithm.
-- Scale helpers (linear, time, band) are pure functions, separated from
-  rendering for testability.
-
-### Usage
-
-```tsx
-import { LineChart, Legend } from "@/components/charts";
-
-<LineChart
-  data={series}
-  xAccessor={(d) => d.date}
-  yAccessor={(d) => d.value}
-  ariaLabel="Volume over time"
-/>
-```
-
-See `src/lib/analytics.ts` (`getStatusChartColors`) for the shared status
-palette, which pairs each state with a distinct pattern/marker in addition to
-its colour.
+The shared status palette lives in `src/lib/analytics.ts`
+(`getStatusChartColors`).
