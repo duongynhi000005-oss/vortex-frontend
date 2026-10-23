@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useDismissableOverlay } from "@/hooks/useDismissableOverlay";
 import { useTranslation } from "@/lib/i18n/I18nProvider";
 import type { MessageKey } from "@/lib/i18n";
@@ -14,6 +14,7 @@ import {
   type SlippageStatus,
 } from "@/lib/slippage";
 import { useSwapSettings } from "@/store/swapSettings";
+import { useAnnounce } from "@/components/Announcer";
 
 const STATUS_MESSAGE_KEY: Partial<Record<SlippageStatus, MessageKey>> = {
   low: "swap.slippage.lowWarning",
@@ -66,6 +67,7 @@ export function SwapSettings({
   const close = useCallback(() => setOpen(false), []);
   const panelRef = useDismissableOverlay<HTMLDivElement>({ isOpen: open, onClose: close, triggerRef });
   const baseId = useId();
+  const announce = useAnnounce();
 
   const customValue = parseSlippageInput(customText);
   const status: SlippageStatus =
@@ -83,6 +85,14 @@ export function SwapSettings({
     setCustomText("");
     setSlippagePct(pct);
   };
+
+  // Route slippage-status changes through the shared Announcer so screen
+  // readers get consistent throttling/coalescing per docs/accessibility.md.
+  // Invalid values are announced assertively; warnings politely.
+  useEffect(() => {
+    if (!statusKey) return;
+    announce(t(statusKey), { politeness: status === "invalid" ? "assertive" : "polite" });
+  }, [statusKey, status, announce, t]);
 
   const handleCustomChange = (raw: string) => {
     setCustomMode(true);
@@ -142,8 +152,9 @@ export function SwapSettings({
           ref={panelRef}
           role="dialog"
           aria-label={t("swap.settings.title")}
-          className="absolute right-0 z-20 mt-2 w-72 max-w-[calc(100vw-2rem)] rounded-xl border border-vx-border bg-vx-surface p-4 space-y-4 shadow-xl"
+          className="fixed inset-x-0 bottom-0 z-30 w-full max-h-[85vh] overflow-y-auto rounded-t-2xl border-t border-vx-border bg-vx-surface p-4 space-y-4 shadow-2xl motion-safe:animate-[vx-sheet-up_180ms_ease-out] sm:absolute sm:inset-x-auto sm:bottom-auto sm:right-0 sm:top-full sm:z-20 sm:mt-2 sm:w-72 sm:max-w-[calc(100vw-2rem)] sm:max-h-none sm:overflow-visible sm:rounded-xl sm:border sm:shadow-xl sm:animate-none"
         >
+          <div aria-hidden="true" className="mx-auto mb-1 h-1 w-10 rounded-full bg-vx-border sm:hidden" />
           <fieldset className="space-y-2">
             <legend className="eyebrow mb-2">{t("swap.slippage.label")}</legend>
             <div className="flex flex-wrap gap-2">
@@ -236,7 +247,7 @@ export function SwapSettings({
           <button
             type="button"
             onClick={handleReset}
-            className="text-xs text-vx-muted underline hover:text-vx-text focus:outline-none focus-visible:ring-2 focus-visible:ring-vx-sage/60 rounded"
+            className="text-xs text-vx-muted hover:text-vx-text underline-offset-2 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-vx-sage/60 rounded"
           >
             {t("swap.settings.reset")}
           </button>

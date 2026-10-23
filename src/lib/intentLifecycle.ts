@@ -151,3 +151,30 @@ export function loadLastSubmittedIntent(): string | null {
     return null;
   }
 }
+
+// ── Onboarding milestone: has the user ever submitted an intent? ──
+//
+// `saveLastSubmittedIntent(null)` clears the in-flight tracker pointer, so the
+// presence of LAST_INTENT_KEY alone can't prove a swap ever happened. We keep a
+// separate, sticky flag that is only ever set (never cleared) so the onboarding
+// checklist can reliably check off "submit a first intent".
+
+export const FIRST_INTENT_KEY = "vortex:firstIntentSubmitted";
+export const FIRST_INTENT_EVENT = "vortex:first-intent-changed";
+
+export function markFirstIntentSubmitted(): void {
+  try {
+    window.localStorage.setItem(FIRST_INTENT_KEY, "1");
+  } catch {
+    // Storage may be unavailable (private mode); the milestone just won't persist.
+  }
+  if (typeof window !== "undefined") window.dispatchEvent(new Event(FIRST_INTENT_EVENT));
+}
+
+export function hasSubmittedFirstIntent(): boolean {
+  try {
+    return window.localStorage.getItem(FIRST_INTENT_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
