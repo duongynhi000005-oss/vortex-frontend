@@ -153,6 +153,74 @@ jobs:
           path: playwright-report/
           retention-days: 30
 
+  # ─── mutation testing (Stryker) ─────────────────────────
+  # PRs: incremental run, scored per changed src/lib file and posted as a comment.
+  # Nightly: full run over all src/lib mutants.
+  mutation:
+    name: Mutation tests (Stryker)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' || github.event_name == 'schedule'
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: "npm"
+      - run: npm ci
+      - name: Restore Stryker incremental cache
+        if: github.event_name == 'pull_request'
+        uses: actions/cache@v4
+        with:
+          path: reports/stryker-incremental.json
+          key: stryker-incremental-${{ github.head_ref }}-${{ github.run_id }}
+          restore-keys: |
+            stryker-incremental-${{ github.head_ref }}-
+            stryker-incremental-
+      - name: Incremental mutation run (PR)
+        if: github.event_name == 'pull_request'
+        run: npm run test:mutation:incremental
+      - name: Full mutation run (nightly)
+        if: github.event_name == 'schedule'
+        run: npm run test:mutation
+      - name: Summarise changed-file mutation score (PR)
+        if: github.event_name == 'pull_request'
+        id: mutation-summary
+        continue-on-error: true
+        run: npm run check:mutation-summary -- origin/${{ github.base_ref }} > reports/mutation/summary.md
+      - name: Post mutation score as PR comment
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let report = '';
+            try {
+              report = fs.readFileSync('reports/mutation/summary.md', 'utf8');
+            } catch {
+              report = '⚠️ Mutation summary could not be generated.';
+            }
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: report,
+            });
+      - name: Fail if a changed file is below its mutation floor
+        if: github.event_name == 'pull_request' && steps.mutation-summary.outcome == 'failure'
+        run: exit 1
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: mutation-report
+          path: reports/mutation/
+          retention-days: 30
+
   build:
     name: Build & bundle size
     runs-on: ubuntu-latest
