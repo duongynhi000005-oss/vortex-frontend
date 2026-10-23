@@ -91,4 +91,9 @@ export const es = {
   "governance.quorum.passing": "Aprobada",
   "governance.quorum.failing": "No aprobada",
   "governance.quorum.abstain": "Votos de abstención",
+  "analytics.routeFlow.exportPng": "Exportar como PNG",
+  "analytics.routeFlow.diagramAria": "Diagrama de flujo de rutas Sankey",
+  "analytics.routeFlow.threshold": "Umbral mín. de volumen:",
+  "analytics.routeFlow.showTable": "Mostrar tabla",
+  "analytics.routeFlow.hideTable": "Ocultar tabla",
 } as const satisfies Record<keyof typeof import("./en").en, string>;

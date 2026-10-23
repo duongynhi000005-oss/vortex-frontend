@@ -91,4 +91,9 @@ export const en = {
   "governance.quorum.passing": "Passing",
   "governance.quorum.failing": "Not passing",
   "governance.quorum.abstain": "Votes Abstain",
+  "analytics.routeFlow.exportPng": "Export as PNG",
+  "analytics.routeFlow.diagramAria": "Route flow Sankey diagram",
+  "analytics.routeFlow.threshold": "Min. volume threshold:",
+  "analytics.routeFlow.showTable": "Show table",
+  "analytics.routeFlow.hideTable": "Hide table",
 } as const;
