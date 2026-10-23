@@ -1,143 +1,161 @@
-name: Synthetic Uptime & Health Check
+name: Staging Synthetic Check
+
+# Playwright user-path check against staging every 15 minutes. Failures open or
+# update one `incident` issue; recovery closes it. Results are published to the
+# gh-pages status page. Runbook: docs/synthetic-monitoring.md
+#
+# Read-only: the suite never connects a wallet, signs, or submits anything.
 
 on:
   schedule:
-    # Run every 30 minutes
-    - cron: '*/30 * * * *'
+    # GitHub may delay scheduled runs under load; the status page shows gaps.
+    - cron: '*/15 * * * *'
   workflow_dispatch:
     inputs:
-      production_url:
-        description: 'Target Frontend URL to check'
+      staging_url:
+        description: 'Staging frontend URL to check'
         required: false
         default: 'https://vortex-frontend.vercel.app'
       api_url:
-        description: 'Target Backend API URL to check'
+        description: 'Staging relay API URL to check'
         required: false
         default: 'https://api.vortex-protocol.org'
+      force_failure:
+        description: 'Demo: set the quote budget to 1 ms so the quote check fails and opens an incident'
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  # One run at a time so the gh-pages history is appended in order.
+  group: staging-synthetic
+  cancel-in-progress: false
 
 jobs:
-  uptime-check:
-    name: Synthetic Health Monitor
+  synthetic:
+    name: Staging user-path checks
+    # Set repository variable SYNTHETIC_MAINTENANCE=true during planned staging
+    # downtime to skip probing (and incident handling) without editing this file.
+    if: vars.SYNTHETIC_MAINTENANCE != 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    env:
+      SYNTHETIC_BASE_URL: ${{ github.event.inputs.staging_url || vars.SYNTHETIC_BASE_URL || 'https://vortex-frontend.vercel.app' }}
+      SYNTHETIC_API_URL: ${{ github.event.inputs.api_url || vars.SYNTHETIC_API_URL || 'https://api.vortex-protocol.org' }}
+      SYNTHETIC_QUOTE_BUDGET_MS: ${{ github.event.inputs.force_failure == 'true' && '1' || vars.SYNTHETIC_QUOTE_BUDGET_MS || '5000' }}
+      SYNTHETIC_QUOTE_PATH: ${{ vars.SYNTHETIC_QUOTE_PATH }}
+      SYNTHETIC_WS_BUDGET_MS: ${{ vars.SYNTHETIC_WS_BUDGET_MS || '10000' }}
+      CI: 'true'
 
     steps:
-      - name: Resolve Target Endpoints
-        id: targets
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: '.nvmrc'
+
+      # package-lock.json is not committed in this repo, so `npm ci` cannot be used.
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run staging synthetic
+        id: playwright
+        continue-on-error: true
+        run: npx playwright test -c e2e/synthetic/playwright.config.ts
+
+      - name: Normalise results
+        if: always()
+        run: node scripts/status-page/normalise-results.mjs --report synthetic-results/results.json --out synthetic-results/run.json
+        env:
+          GITHUB_RUN_ID: ${{ github.run_id }}
+
+      - name: Upload results and traces
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: synthetic-results
+          path: synthetic-results/
+          retention-days: 14
+
+  report:
+    name: Publish status and incidents
+    needs: synthetic
+    if: always() && needs.synthetic.result != 'skipped'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Write scopes live only in this job; the probe above runs read-only.
+    permissions:
+      contents: write
+      issues: write
+    concurrency:
+      group: staging-synthetic-report
+      cancel-in-progress: false
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check out status page branch
+        uses: actions/checkout@v7
+        with:
+          ref: gh-pages
+          path: pages
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: synthetic-results
+          path: synthetic-results
+
+      - name: Append run and rebuild status page
+        run: node scripts/status-page/build-status-page.mjs --run synthetic-results/run.json --out pages
+
+      - name: Open, update, or close incident
+        id: incident
+        run: node scripts/status-page/incident.mjs --run synthetic-results/run.json
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Notify chat webhook
+        # Only on open and close, so the 15-minute cadence does not spam the channel.
+        if: steps.incident.outputs.action == 'open' || steps.incident.outputs.action == 'close'
+        env:
+          WEBHOOK_URL: ${{ secrets.SYNTHETIC_WEBHOOK_URL }}
+          ACTION: ${{ steps.incident.outputs.action }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          PROD_URL="${{ github.event.inputs.production_url || vars.PRODUCTION_URL || 'https://vortex-frontend.vercel.app' }}"
-          API_URL="${{ github.event.inputs.api_url || vars.NEXT_PUBLIC_API_URL || 'https://api.vortex-protocol.org' }}"
-          echo "prod_url=$PROD_URL" >> $GITHUB_OUTPUT
-          echo "api_url=$API_URL" >> $GITHUB_OUTPUT
-          echo "Checking Frontend: $PROD_URL"
-          echo "Checking Backend Relay: $API_URL"
+          if [ -z "$WEBHOOK_URL" ]; then
+            echo "SYNTHETIC_WEBHOOK_URL not set; skipping chat notification."
+            exit 0
+          fi
+          if [ "$ACTION" = "open" ]; then
+            MSG="Vortex staging synthetic is failing. Incident opened: $RUN_URL"
+          else
+            MSG="Vortex staging synthetic recovered. Incident closed: $RUN_URL"
+          fi
+          # `text` serves Slack-compatible endpoints; `content` serves Discord.
+          PAYLOAD=$(jq -n --arg t "$MSG" '{text: $t, content: $t}')
+          curl -sS --fail --max-time 10 -H 'Content-Type: application/json' -d "$PAYLOAD" "$WEBHOOK_URL" > /dev/null
 
-      - name: Check Production Frontend Uptime
-        id: check-frontend
+      - name: Publish status page
+        working-directory: pages
         run: |
-          TARGET_URL="${{ steps.targets.outputs.prod_url }}"
-          MAX_ATTEMPTS=2
-          DELAY_SEC=5
-          SUCCESS=false
-          HTTP_CODE=""
-          LATENCY=""
-
-          echo "Starting frontend synthetic probe against $TARGET_URL (up to $MAX_ATTEMPTS attempts)..."
-
-          for attempt in $(seq 1 $MAX_ATTEMPTS); do
-            echo "Attempt $attempt of $MAX_ATTEMPTS..."
-            START_TIME=$(date +%s%3N)
-            HTTP_CODE=$(curl -s -o response_fe.html -w "%{http_code}" --connect-timeout 10 --max-time 15 -L "$TARGET_URL" || echo "000")
-            END_TIME=$(date +%s%3N)
-            LATENCY=$((END_TIME - START_TIME))
-
-            echo "Response status: $HTTP_CODE (Latency: ${LATENCY}ms)"
-
-            if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 400 ]; then
-              if grep -qi -E "vortex|stellar|intent" response_fe.html || [ -s response_fe.html ]; then
-                echo "Content validation passed: found expected frontend markup."
-                SUCCESS=true
-                break
-              else
-                echo "Warning: HTTP status was $HTTP_CODE, but expected branding text was not matched in response."
-              fi
-            fi
-
-            if [ "$attempt" -lt "$MAX_ATTEMPTS" ]; then
-              echo "Transient check failure; retrying in ${DELAY_SEC}s..."
-              sleep $DELAY_SEC
-            fi
-          done
-
-          if [ "$SUCCESS" != "true" ]; then
-            echo "::error title=Frontend Uptime Check Failed::Production URL $TARGET_URL is unhealthy (HTTP $HTTP_CODE, Latency: ${LATENCY}ms)"
-            echo "### ❌ Frontend Uptime Check Failed" >> $GITHUB_STEP_SUMMARY
-            echo "- **Target URL:** \`$TARGET_URL\`" >> $GITHUB_STEP_SUMMARY
-            echo "- **HTTP Code:** \`$HTTP_CODE\`" >> $GITHUB_STEP_SUMMARY
-            echo "- **Latency:** \`${LATENCY}ms\`" >> $GITHUB_STEP_SUMMARY
-            echo "- **Attempts:** $MAX_ATTEMPTS" >> $GITHUB_STEP_SUMMARY
-            exit 1
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No status page changes to publish."
+          else
+            git commit -m "status: staging synthetic $(date -u +%Y-%m-%dT%H:%MZ)"
+            git push origin HEAD:gh-pages
           fi
 
-          echo "### ✅ Frontend Uptime Check Passed" >> $GITHUB_STEP_SUMMARY
-          echo "- **Target URL:** \`$TARGET_URL\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **HTTP Code:** \`$HTTP_CODE\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **Latency:** \`${LATENCY}ms\`" >> $GITHUB_STEP_SUMMARY
-
-      - name: Check Backend API Relay Health
-        id: check-backend
-        run: |
-          API_URL="${{ steps.targets.outputs.api_url }}"
-          HEALTH_ENDPOINT="${API_URL%/}/health"
-          MAX_ATTEMPTS=2
-          DELAY_SEC=5
-          SUCCESS=false
-          HTTP_CODE=""
-          LATENCY=""
-
-          echo "Starting backend relay probe against $HEALTH_ENDPOINT (up to $MAX_ATTEMPTS attempts)..."
-
-          for attempt in $(seq 1 $MAX_ATTEMPTS); do
-            echo "Attempt $attempt of $MAX_ATTEMPTS..."
-            START_TIME=$(date +%s%3N)
-            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 10 --max-time 15 "$HEALTH_ENDPOINT" || echo "000")
-            END_TIME=$(date +%s%3N)
-            LATENCY=$((END_TIME - START_TIME))
-
-            echo "Response status: $HTTP_CODE (Latency: ${LATENCY}ms)"
-
-            if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 400 ]; then
-              SUCCESS=true
-              break
-            fi
-
-            # Fallback to root if /health is not defined
-            if [ "$HTTP_CODE" = "404" ] || [ "$HTTP_CODE" = "000" ]; then
-              ROOT_CODE=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 10 --max-time 15 "$API_URL" || echo "000")
-              if [ "$ROOT_CODE" -ge 200 ] && [ "$ROOT_CODE" -lt 500 ] && [ "$ROOT_CODE" != "000" ]; then
-                echo "Relay root responded with HTTP $ROOT_CODE (reachable)."
-                SUCCESS=true
-                HTTP_CODE=$ROOT_CODE
-                break
-              fi
-            fi
-
-            if [ "$attempt" -lt "$MAX_ATTEMPTS" ]; then
-              echo "Transient check failure; retrying in ${DELAY_SEC}s..."
-              sleep $DELAY_SEC
-            fi
-          done
-
-          if [ "$SUCCESS" != "true" ]; then
-            echo "::error title=Backend Relay Health Check Failed::Backend Relay $HEALTH_ENDPOINT is unreachable (HTTP $HTTP_CODE, Latency: ${LATENCY}ms)"
-            echo "### ❌ Backend Relay Health Check Failed" >> $GITHUB_STEP_SUMMARY
-            echo "- **Target URL:** \`$HEALTH_ENDPOINT\`" >> $GITHUB_STEP_SUMMARY
-            echo "- **HTTP Code:** \`$HTTP_CODE\`" >> $GITHUB_STEP_SUMMARY
-            echo "- **Latency:** \`${LATENCY}ms\`" >> $GITHUB_STEP_SUMMARY
-            exit 1
-          fi
-
-          echo "### ✅ Backend Relay Health Check Passed" >> $GITHUB_STEP_SUMMARY
-          echo "- **Target URL:** \`$HEALTH_ENDPOINT\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **HTTP Code:** \`$HTTP_CODE\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **Latency:** \`${LATENCY}ms\`" >> $GITHUB_STEP_SUMMARY
+      - name: Fail the workflow if the staging run failed
+        # Incident handling above is the alert; this keeps the run itself red.
+        run: jq -e '.status == "pass"' synthetic-results/run.json > /dev/null
