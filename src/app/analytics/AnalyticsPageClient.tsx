@@ -6,6 +6,7 @@ import { Nav } from "@/components/Nav";
 import { useLiveIntents } from "@/hooks/useLiveIntents";
 import {
   computeAnalytics,
+  filterAnalyticsIntents,
   getStatusDistributionEntries,
   computeShareSeries,
   computeConcentration,
@@ -1065,8 +1066,10 @@ function RouteFlowPanel({
       )}
     </div>
   );
-}
-
+}
+
+
+
 // ─── Export menu (issue #466) ─────────────────────────────────────────────────
 
 function ExportMenu({
@@ -1237,44 +1240,79 @@ export default function AnalyticsPageClient() {
   const { intents, isLoading, error } = useLiveIntents();
   const chartRef = useRef<HTMLDivElement>(null);
 
-  // Filter states restored from URL (#601)
+  // Filter states & controls (#600, #601)
   const [selectedChain, setSelectedChain] = useState<string | null>(null);
   const [selectedToken, setSelectedToken] = useState<string | null>(null);
   const [dateFrom, setDateFrom] = useState<string | null>(null);
   const [dateTo, setDateTo] = useState<string | null>(null);
+  const [activePreset, setActivePreset] = useState<"24h" | "7d" | "30d" | "all" | "custom">("all");
 
   useEffect(() => {
     const shared = readShareStateFromUrl();
     if (shared) {
       if (shared.chain) setSelectedChain(shared.chain);
       if (shared.token) setSelectedToken(shared.token);
-      if (shared.from) setDateFrom(shared.from);
-      if (shared.to) setDateTo(shared.to);
+      if (shared.from) {
+        setDateFrom(shared.from);
+        setActivePreset("custom");
+      }
+      if (shared.to) {
+        setDateTo(shared.to);
+        setActivePreset("custom");
+      }
     }
   }, []);
 
-  const filteredIntents = useMemo(() => {
-    if (!selectedChain && !selectedToken && !dateFrom && !dateTo) {
-      return intents;
+  const availableTokens = useMemo(() => {
+    const set = new Set<string>();
+    for (const intent of intents) {
+      if (intent.srcToken) set.add(intent.srcToken);
+      if (intent.dstToken) set.add(intent.dstToken);
     }
-    return intents.filter((intent) => {
-      if (selectedChain && intent.srcChain !== selectedChain) return false;
-      if (
-        selectedToken &&
-        intent.srcToken !== selectedToken &&
-        intent.dstToken !== selectedToken
-      ) {
-        return false;
-      }
-      if (dateFrom && new Date(intent.createdAt).getTime() < new Date(dateFrom).getTime()) {
-        return false;
-      }
-      if (dateTo && new Date(intent.createdAt).getTime() > new Date(dateTo).getTime()) {
-        return false;
-      }
-      return true;
-    });
-  }, [intents, selectedChain, selectedToken, dateFrom, dateTo]);
+    return Array.from(set).sort();
+  }, [intents]);
+
+  const handlePresetClick = useCallback((preset: "24h" | "7d" | "30d" | "all") => {
+    setActivePreset(preset);
+    const now = Date.now();
+    if (preset === "24h") {
+      setDateFrom(new Date(now - 24 * 60 * 60 * 1000).toISOString());
+      setDateTo(null);
+    } else if (preset === "7d") {
+      setDateFrom(new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString());
+      setDateTo(null);
+    } else if (preset === "30d") {
+      setDateFrom(new Date(now - 30 * 24 * 60 * 60 * 1000).toISOString());
+      setDateTo(null);
+    } else {
+      setDateFrom(null);
+      setDateTo(null);
+    }
+  }, []);
+
+  const handleResetFilters = useCallback(() => {
+    setSelectedChain(null);
+    setSelectedToken(null);
+    setDateFrom(null);
+    setDateTo(null);
+    setActivePreset("all");
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.delete(SHARE_PARAM);
+      window.history.replaceState({}, "", url.toString());
+    }
+  }, []);
+
+  const filteredIntents = useMemo(
+    () =>
+      filterAnalyticsIntents(intents, {
+        chain: selectedChain,
+        token: selectedToken,
+        from: dateFrom,
+        to: dateTo,
+      }),
+    [intents, selectedChain, selectedToken, dateFrom, dateTo],
+  );
 
   const workerSnapshot = useAnalyticsWorker(filteredIntents);
   const fallbackAnalytics = useMemo(
@@ -1418,6 +1456,152 @@ export default function AnalyticsPageClient() {
           />
         </div>
 
+        {/* Analytics Filter Toolbar (#600) */}
+        <div
+          className="mb-6 rounded-xl border border-vx-border bg-vx-surface/50 p-4 backdrop-blur-xs"
+          role="region"
+          aria-label={t("analytics.filters.title")}
+          data-testid="analytics-filter-bar"
+        >
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            {/* Left: Date-range presets and custom dates */}
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="text-xs font-semibold text-vx-dim">
+                {t("analytics.filters.dateRange")}:
+              </span>
+              <div
+                className="flex items-center gap-1 rounded-lg border border-vx-border bg-vx-surface/80 p-1"
+                role="group"
+                aria-label={t("analytics.filters.dateRange")}
+              >
+                {(
+                  [
+                    { id: "24h", label: t("analytics.filters.preset24h") },
+                    { id: "7d", label: t("analytics.filters.preset7d") },
+                    { id: "30d", label: t("analytics.filters.preset30d") },
+                    { id: "all", label: t("analytics.filters.presetAll") },
+                  ] as const
+                ).map((preset) => {
+                  const isActive = activePreset === preset.id;
+                  return (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      onClick={() => handlePresetClick(preset.id)}
+                      className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+                        isActive
+                          ? "bg-vx-accent text-white shadow-xs"
+                          : "text-vx-muted hover:bg-vx-surface hover:text-vx-text"
+                      }`}
+                      data-testid={`filter-preset-${preset.id}`}
+                      aria-pressed={isActive}
+                    >
+                      {preset.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Custom Date Inputs */}
+              <div className="flex items-center gap-2">
+                <label className="flex items-center gap-1 text-xs text-vx-muted">
+                  <span>{t("analytics.filters.from")}:</span>
+                  <input
+                    type="date"
+                    value={dateFrom ? dateFrom.slice(0, 10) : ""}
+                    onChange={(e) => {
+                      setActivePreset("custom");
+                      setDateFrom(
+                        e.target.value ? new Date(e.target.value).toISOString() : null,
+                      );
+                    }}
+                    className="rounded-lg border border-vx-border bg-vx-surface px-2.5 py-1 text-xs text-vx-text focus:outline-none focus:ring-1 focus:ring-vx-accent"
+                    aria-label={t("analytics.filters.from")}
+                    data-testid="filter-input-date-from"
+                  />
+                </label>
+                <label className="flex items-center gap-1 text-xs text-vx-muted">
+                  <span>{t("analytics.filters.to")}:</span>
+                  <input
+                    type="date"
+                    value={dateTo ? dateTo.slice(0, 10) : ""}
+                    onChange={(e) => {
+                      setActivePreset("custom");
+                      setDateTo(
+                        e.target.value
+                          ? new Date(e.target.value + "T23:59:59.999Z").toISOString()
+                          : null,
+                      );
+                    }}
+                    className="rounded-lg border border-vx-border bg-vx-surface px-2.5 py-1 text-xs text-vx-text focus:outline-none focus:ring-1 focus:ring-vx-accent"
+                    aria-label={t("analytics.filters.to")}
+                    data-testid="filter-input-date-to"
+                  />
+                </label>
+              </div>
+            </div>
+
+            {/* Right: Chain, Token dropdowns, Reset button */}
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Chain Selector */}
+              <div className="flex items-center gap-1.5">
+                <label htmlFor="analytics-chain-select" className="sr-only">
+                  {t("analytics.filters.chain")}
+                </label>
+                <select
+                  id="analytics-chain-select"
+                  value={selectedChain ?? ""}
+                  onChange={(e) => setSelectedChain(e.target.value || null)}
+                  className="rounded-lg border border-vx-border bg-vx-surface px-3 py-1.5 text-xs text-vx-text focus:outline-none focus:ring-1 focus:ring-vx-accent"
+                  aria-label={t("analytics.filters.chain")}
+                  data-testid="filter-select-chain"
+                >
+                  <option value="">{t("analytics.filters.allChains")}</option>
+                  {CHAINS.map((chain) => (
+                    <option key={chain.id} value={chain.id}>
+                      {chain.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Token Selector */}
+              <div className="flex items-center gap-1.5">
+                <label htmlFor="analytics-token-select" className="sr-only">
+                  {t("analytics.filters.token")}
+                </label>
+                <select
+                  id="analytics-token-select"
+                  value={selectedToken ?? ""}
+                  onChange={(e) => setSelectedToken(e.target.value || null)}
+                  className="rounded-lg border border-vx-border bg-vx-surface px-3 py-1.5 text-xs text-vx-text focus:outline-none focus:ring-1 focus:ring-vx-accent"
+                  aria-label={t("analytics.filters.token")}
+                  data-testid="filter-select-token"
+                >
+                  <option value="">{t("analytics.filters.allTokens")}</option>
+                  {availableTokens.map((tok) => (
+                    <option key={tok} value={tok}>
+                      {tok}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Reset Action */}
+              {(selectedChain || selectedToken || dateFrom || dateTo) && (
+                <button
+                  type="button"
+                  onClick={handleResetFilters}
+                  className="rounded-lg border border-vx-border/80 bg-vx-surface px-3 py-1.5 text-xs font-medium text-vx-muted transition-colors hover:bg-vx-surface/80 hover:text-vx-text focus:outline-none focus:ring-1 focus:ring-vx-accent"
+                  data-testid="filter-reset-button"
+                >
+                  {t("analytics.filters.reset")}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
         {/* Active Shared Filters Banner (#601) */}
         {(selectedChain || selectedToken || dateFrom || dateTo) && (
           <div
@@ -1448,17 +1632,7 @@ export default function AnalyticsPageClient() {
             )}
             <button
               type="button"
-              onClick={() => {
-                setSelectedChain(null);
-                setSelectedToken(null);
-                setDateFrom(null);
-                setDateTo(null);
-                if (typeof window !== "undefined") {
-                  const url = new URL(window.location.href);
-                  url.searchParams.delete(SHARE_PARAM);
-                  window.history.replaceState({}, "", url.toString());
-                }
-              }}
+              onClick={handleResetFilters}
               className="ml-auto underline text-vx-dim hover:text-vx-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-vx-accent"
               data-testid="clear-shared-filters-btn"
             >

@@ -1025,3 +1025,66 @@ export function computeTopMovers(
   movers.sort((a, b) => Math.abs(b.deltaSharePct) - Math.abs(a.deltaSharePct));
   return movers.slice(0, 10);
 }
+
+// ─── Analytics Filter Engine (issue #600) ────────────────────────────────────
+
+export interface AnalyticsFilterParams {
+  chain?: string | null;
+  token?: string | null;
+  from?: string | null;
+  to?: string | null;
+}
+
+/**
+ * Pure, deterministic filter evaluating an array of intent records against
+ * date-range, chain, and token criteria.
+ */
+export function filterAnalyticsIntents<
+  T extends {
+    srcChain?: string;
+    dstChain?: string;
+    srcToken?: string;
+    dstToken?: string;
+    createdAt: string;
+  },
+>(intents: T[], filters: AnalyticsFilterParams): T[] {
+  const { chain, token, from, to } = filters;
+  if (!chain && !token && !from && !to) {
+    return intents;
+  }
+
+  const fromTime = from ? new Date(from).getTime() : null;
+  const toTime = to ? new Date(to).getTime() : null;
+
+  return intents.filter((intent) => {
+    // Chain filter: matches either source or destination network
+    if (chain) {
+      const matchSrc = intent.srcChain === chain;
+      const matchDst = intent.dstChain === chain;
+      if (!matchSrc && !matchDst) {
+        return false;
+      }
+    }
+
+    // Token filter: matches either source or destination token symbol
+    if (token) {
+      const matchSrc = intent.srcToken === token;
+      const matchDst = intent.dstToken === token;
+      if (!matchSrc && !matchDst) {
+        return false;
+      }
+    }
+
+    // Date range filter
+    const intentTime = new Date(intent.createdAt).getTime();
+    if (fromTime !== null && !isNaN(fromTime) && intentTime < fromTime) {
+      return false;
+    }
+    if (toTime !== null && !isNaN(toTime) && intentTime > toTime) {
+      return false;
+    }
+
+    return true;
+  });
+}
+
