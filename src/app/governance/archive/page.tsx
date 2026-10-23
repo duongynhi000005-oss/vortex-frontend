@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { governanceStore } from '@/lib/governanceStore';
+import { bucketProposalsByMonth, getGovernanceProposals } from '@/lib/governanceStore';
+import { BarChart } from '@/components/charts';
 import { isValidStellarAddress } from '@/lib/stellarAddress';
 import { toCsv } from '@/lib/csv';
 
@@ -66,7 +67,7 @@ export default async function GovernanceArchivePage({
   const sort = searchParams.sort === 'oldest' ? 'oldest' : 'newest';
   const page = parsePage(searchParams.page);
 
-  const all = await governanceStore.listProposals();
+  const all = getGovernanceProposals();
 
   const filtered = all.filter((p) => {
     if (status !== 'all' && p.status !== status) return false;
@@ -83,6 +84,8 @@ export default async function GovernanceArchivePage({
     const bt = b.createdAt ? Date.parse(b.createdAt) : 0;
     return sort === 'oldest' ? at - bt : bt - at;
   });
+
+  const timeline = bucketProposalsByMonth(filtered);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -166,6 +169,21 @@ export default async function GovernanceArchivePage({
           Apply filters
         </button>
       </form>
+
+      {timeline.length > 0 ? (
+        <BarChart
+          series={timeline}
+          title="Outcomes by month"
+          summary="Archived proposals per month, stacked by outcome: passed, rejected, executed and expired."
+          width={720}
+          height={200}
+          className="mb-6"
+        />
+      ) : (
+        <p className="mb-6 rounded border border-dashed p-6 text-center text-sm text-muted-foreground">
+          No archived outcomes to chart for the selected filters.
+        </p>
+      )}
 
       {rows.length === 0 ? (
         <p className="rounded border border-dashed p-6 text-center text-sm text-muted-foreground">

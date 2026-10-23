@@ -239,13 +239,26 @@ export function AreaChart(props: ChartProps) {
   );
 }
 
+// Multiple series are stacked per label (series index = segment colour), so each
+// bar's height is the sum across series; the table fallback lists the segments.
 export function BarChart(props: ChartProps) {
   const { series, width = 480, height = 200 } = props;
-  const data = useMemo(() => filterFinite(series[0]?.data ?? []), [series]);
-  const { active, onKeyDown } = useChartKeyboard(data.length);
-  const x = bandScale(data.length, [0, width]);
-  const y = linearScale([0, Math.max(1, ...data.map((d) => d.value))], [height, 0]);
-  const barWidth = data.length > 0 ? width / data.length / 2 : 0;
+  const rows = useMemo(
+    () =>
+      (series[0]?.data ?? []).map((d, row) => ({
+        label: d.label,
+        segments: series.map((s) => {
+          const value = s.data[row]?.value ?? 0;
+          return Number.isFinite(value) ? Math.max(0, value) : 0;
+        }),
+      })),
+    [series],
+  );
+  const totals = rows.map((r) => r.segments.reduce((sum, v) => sum + v, 0));
+  const { active, onKeyDown } = useChartKeyboard(rows.length);
+  const x = bandScale(rows.length, [0, width]);
+  const y = linearScale([0, Math.max(1, ...totals)], [height, 0]);
+  const barWidth = rows.length > 0 ? width / rows.length / 2 : 0;
   return (
     <ChartFrame {...props}>
       <svg
@@ -253,22 +266,34 @@ export function BarChart(props: ChartProps) {
         tabIndex={0}
         width={width}
         height={height}
+        viewBox={`0 0 ${width} ${height}`}
         onKeyDown={onKeyDown}
-        className="max-w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+        className="h-auto max-w-full focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
       >
-        {data.map((d, i) => (
-          <rect
-            key={d.label}
-            x={x(i) - barWidth / 2}
-            y={y(d.value)}
-            width={barWidth}
-            height={height - y(d.value)}
-            fill={chartColor(0)}
-            opacity={i === active ? 1 : 0.85}
-          />
-        ))}
+        {rows.map((r, i) => {
+          let base = 0;
+          return (
+            <g key={r.label} opacity={i === active ? 1 : 0.85}>
+              {r.segments.map((value, s) => {
+                const top = y(base + value);
+                const bottom = y(base);
+                base += value;
+                return (
+                  <rect
+                    key={series[s].name}
+                    x={x(i) - barWidth / 2}
+                    y={top}
+                    width={barWidth}
+                    height={bottom - top}
+                    fill={chartColor(s)}
+                  />
+                );
+              })}
+            </g>
+          );
+        })}
       </svg>
-      {data[active] ? <ChartTooltip label={data[active].label} value={data[active].value} /> : null}
+      {rows[active] ? <ChartTooltip label={rows[active].label} value={totals[active]} /> : null}
     </ChartFrame>
   );
 }
