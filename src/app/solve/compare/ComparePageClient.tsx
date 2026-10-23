@@ -8,6 +8,7 @@ import { Footer } from "@/components/Footer";
 import { EmptyState } from "@/components/EmptyState";
 import { useSolvers } from "@/hooks/useSolvers";
 import { useIntentFeed } from "@/hooks/useIntentFeed";
+import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
 import { useTranslation } from "@/lib/i18n/I18nProvider";
 import { sanitizeDisplayText } from "@/lib/textSafety";
 import {
@@ -16,6 +17,7 @@ import {
   compareSolvers,
   coverageOverlap,
   groupByWeek,
+  compareHref,
   normalizeAddress,
   parseCompareParams,
   type CompareMetric,
@@ -51,6 +53,11 @@ export function ComparePageClient() {
   );
   const { solvers: all, isLoading, error } = useSolvers();
   const { items } = useIntentFeed();
+  const { copy } = useCopyToClipboard();
+
+  // Selection lives entirely in the a/b/c params, so the canonical href built
+  // from the validated addresses is a complete, shareable snapshot.
+  const copyLink = () => copy(new URL(compareHref(addresses), window.location.origin).toString(), t("compare.linkCopied"));
 
   const solvers: Array<Solver | null> = useMemo(
     () => addresses.map((a) => all.find((s) => normalizeAddress(s.address) === a) ?? null),
@@ -177,7 +184,18 @@ export function ComparePageClient() {
         <Link href="/solve" className="text-xs text-vx-sage hover:underline inline-block rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-vx-sage">
           ← {t("compare.back")}
         </Link>
-        <h1 className="text-lg sm:text-2xl font-bold text-vx-text">{t("compare.title")}</h1>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h1 className="text-lg sm:text-2xl font-bold text-vx-text">{t("compare.title")}</h1>
+          {addresses.length > 0 && (
+            <button
+              type="button"
+              onClick={copyLink}
+              className="text-xs text-vx-sage hover:underline rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-vx-sage"
+            >
+              {t("compare.copyLink")}
+            </button>
+          )}
+        </div>
         {invalid.length > 0 && (
           <p role="alert" className="text-xs text-vx-amber">
             {t("compare.invalid", { count: invalid.length })}
