@@ -206,3 +206,29 @@ export function buildSuggestions(
   const seen = new Set<string>();
   return candidates.filter((c) => (seen.has(c.value) ? false : (seen.add(c.value), true))).slice(0, limit);
 }
+
+export type DrilldownFilters = {
+  status?: IntentStatus | null;
+  chain?: string | null;
+  token?: string | null;
+  terms?: readonly string[];
+};
+
+/**
+ * Builds an `/explore` URL pre-filtered to the intents behind an analytics
+ * number (#604). Emits only `key:value` tokens that `parseSearch` will accept,
+ * so the destination always resolves to the same filter set.
+ */
+export function buildExploreDrilldownUrl(filters: DrilldownFilters): string {
+  const parts: string[] = [];
+  if (filters.status && readStatus(filters.status) !== "all") parts.push(`status:${filters.status}`);
+  if (filters.chain && readChain(filters.chain) !== "all") parts.push(`chain:${filters.chain.toLowerCase()}`);
+  const token = readToken(filters.token ?? null);
+  if (token) parts.push(`token:${token}`);
+  for (const term of filters.terms ?? []) {
+    const clean = sanitizeDisplayText(term).trim();
+    if (clean) parts.push(clean);
+  }
+  const query = readQuery(parts.join(" "));
+  return query ? `/explore?q=${encodeURIComponent(query)}` : "/explore";
+}
