@@ -1,5 +1,8 @@
+import { readFileSync } from "node:fs";
 import bundleAnalyzer from "@next/bundle-analyzer";
 import { parseEnv } from "./src/lib/env-schema.mjs";
+
+const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8"));
 
 const withBundleAnalyzer = bundleAnalyzer({
   enabled: process.env.ANALYZE === "true",
@@ -165,6 +168,12 @@ const nextConfig = {
     NEXT_PUBLIC_SETTLEMENT_CONTRACT: process.env.NEXT_PUBLIC_SETTLEMENT_CONTRACT ?? "",
     NEXT_PUBLIC_SOLVER_REGISTRY_CONTRACT: process.env.NEXT_PUBLIC_SOLVER_REGISTRY_CONTRACT ?? "",
     NEXT_PUBLIC_TRUSTED_ORIGINS: process.env.NEXT_PUBLIC_TRUSTED_ORIGINS ?? "",
+    // Build metadata read by src/lib/buildInfo.ts. The version is the single
+    // source of truth in package.json; the commit comes from Vercel or GitHub
+    // Actions, whichever built this bundle.
+    NEXT_PUBLIC_APP_VERSION: pkg.version,
+    NEXT_PUBLIC_COMMIT_SHA: process.env.VERCEL_GIT_COMMIT_SHA ?? process.env.GITHUB_SHA ?? "unknown",
+    NEXT_PUBLIC_BUILD_TIME: new Date().toISOString(),
   },
   async headers() {
     return [

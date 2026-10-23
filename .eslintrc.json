@@ -20,6 +20,10 @@
       "rules": { "no-console": "off" }
     },
     {
+      "files": ["src/lib/buildInfo.ts"],
+      "rules": { "no-restricted-properties": "off" }
+    },
+    {
       "files": ["src/lib/storage.ts"],
       "rules": { "no-restricted-globals": "off", "no-restricted-properties": "off" }
     },

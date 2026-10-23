@@ -36,6 +36,7 @@ registrations. Part of the multi-repo Vortex stack — see also
 | `/contributors` | `src/app/contributors/page.tsx` | Drips Wave contribution transparency dashboard parsing repository issue metrics |
 | `/privacy` | `src/app/privacy/page.tsx` | Privacy & local-data center: inventory, export, clear, private mode |
 | `/api/contributors` | `src/app/api/contributors/route.ts` | Cached server-side proxy for GitHub contributors (1 h revalidate, stale-while-error) |
+| `/api/health` | `src/app/api/health/route.ts` | JSON `{ status, version, commit, uptime }` for the uptime monitor; no secrets or config |
 
 ---
 
@@ -187,7 +188,6 @@ If preview-specific variables are not set, the workflow uses sensible defaults p
 | `npm run storybook`          | Start Storybook on http://localhost:6006                          |
 | `npm run build:storybook`    | Build the static Storybook into `storybook-static/`               |
 | `npm run test:visual`        | Run the Storybook visual regression specs (`.storybook/playwright/`) |
-| `npm run changelog`          | Prepend the unreleased changes to `CHANGELOG.md`                  |
 
 ---
 
