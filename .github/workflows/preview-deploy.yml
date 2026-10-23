@@ -53,6 +53,7 @@ jobs:
         id: build
         env:
           # Use staging/non-production backends for PR previews
+          VORTEX_ENV: preview
           NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_PREVIEW_API_URL || 'https://api.testnet.example.com' }}
           NEXT_PUBLIC_WS_URL: ${{ secrets.NEXT_PUBLIC_PREVIEW_WS_URL || 'wss://api.testnet.example.com/ws' }}
           NEXT_PUBLIC_NETWORK: ${{ secrets.NEXT_PUBLIC_PREVIEW_NETWORK || 'testnet' }}
