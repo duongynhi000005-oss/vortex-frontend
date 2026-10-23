@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Nav } from "@/components/Nav";
+import { GitHubContributorsWall } from "@/components/contributors/GitHubContributorsWall";
 import type { ComplexityTier, IssueStatus, WaveMetrics } from "@/lib/issuesParser";
 import { useTranslation } from "@/lib/i18n/I18nProvider";
 import type { MessageKey } from "@/lib/i18n";
@@ -273,6 +274,9 @@ export default function ContributorsPageClient({ metrics }: { metrics: WaveMetri
             </table>
           </div>
         </div>
+
+        {/* GitHub Contributors Wall */}
+        <GitHubContributorsWall className="mb-10" />
 
         {/* Filterable Issues Table */}
         <div className="card overflow-hidden">
