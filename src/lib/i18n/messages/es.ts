@@ -1,6 +1,6 @@
-import type { en } from "./en";
-
-export const es: Record<keyof typeof en, string> = {
+// Spanish catalog. Must define exactly the same keys and {placeholder} tokens
+// as `en`; `npm run check:i18n` enforces parity.
+export const es = {
   "compare.copyLink": "Copiar enlace de comparación",
   "compare.linkCopied": "Enlace de comparación copiado",
   "solverDashboard.active.expiringBadge": "{count} por vencer",
@@ -12,4 +12,74 @@ export const es: Record<keyof typeof en, string> = {
   "swap.slippage.suggestion": "Esta cotización tiene un alto impacto en el precio. Sube la tolerancia de deslizamiento a {percent}% para que el swap no falle.",
   "swap.slippage.suggestionApply": "Usar {percent}%",
   "swap.slippage.suggestionDismiss": "Descartar",
-};
+  "governance.impact.title": "Vista previa del impacto",
+  "governance.impact.unavailable": "La vista previa del impacto solo está disponible para propuestas de umbral de fianza.",
+  "governance.impact.loading": "Calculando el impacto en los solvers activos…",
+  "governance.impact.error": "No se pudieron cargar los datos de los solvers para estimar el impacto.",
+  "governance.impact.noSolvers": "No hay solvers activos con los que simular.",
+  "governance.impact.raiseNoneAffected":
+    "Subir la fianza mínima de {current} a {proposed} no afectaría a ninguno de los {total} solvers activos.",
+  "governance.impact.raise":
+    "Subir la fianza mínima de {current} a {proposed} dejaría a {lose} de {total} solvers activos por debajo del umbral.",
+  "governance.impact.lower":
+    "Bajar la fianza mínima de {current} a {proposed} no cambiaría la elegibilidad de ninguno de los {total} solvers activos.",
+  "governance.impact.lowerWithGain":
+    "Bajar la fianza mínima de {current} a {proposed} haría elegibles a {gain} solvers más, de un total de {total} solvers activos.",
+  "governance.impact.unchanged": "La fianza mínima propuesta ({proposed}) es igual al valor actual, por lo que nada cambia.",
+  "governance.impact.basis": "Basado en {total} solvers activos y sus fianzas actuales.",
+
+  "wave.breadcrumb": "Seguimiento de Wave",
+  "wave.eyebrow": "Drips Wave",
+  "wave.title": "Seguimiento de Wave",
+  "wave.description":
+    "Progreso en vivo del programa Drips Wave: issues completados, puntos obtenidos y los colaboradores detrás de ellos.",
+  "wave.progress": "Progreso",
+  "wave.progress.issues": "de {total} issues",
+  "wave.progress.complete": "{percent}% completado",
+  "wave.points": "Puntos",
+  "wave.points.remaining": "Faltan {count} puntos",
+  "wave.points.short": "{count} pts",
+  "wave.distribution": "Distribución",
+  "wave.activeContributors": "Colaboradores activos",
+  "wave.activeContributors.note": "Direcciones con al menos un issue completado",
+  "wave.status.completed": "Completado",
+  "wave.status.done": "Hecho",
+  "wave.status.inProgress": "En curso",
+  "wave.status.open": "Abierto",
+  "wave.categories": "Categorías",
+  "wave.categories.completed": "{completed} / {total} completados",
+  "wave.tiers": "Niveles de complejidad",
+  "wave.tiers.total": "{count} puntos en total",
+  "wave.tier.trivial": "Trivial (50 pts)",
+  "wave.tier.medium": "Media (150 pts)",
+  "wave.tier.high": "Alta (200 pts)",
+  "wave.tierName.trivial": "Trivial",
+  "wave.tierName.medium": "Media",
+  "wave.tierName.high": "Alta",
+  "wave.leaderboard": "Clasificación de colaboradores",
+  "wave.leaderboard.count": "{count} colaboradores",
+  "wave.leaderboard.rank": "Puesto",
+  "wave.leaderboard.address": "Dirección",
+  "wave.leaderboard.completed": "Completados",
+  "wave.leaderboard.points": "Puntos",
+  "wave.issues": "Issues",
+  "wave.issues.showing": "Mostrando {shown} de {total}",
+  "wave.issues.search": "Buscar por título, ID o colaborador",
+  "wave.issues.allCategories": "Todas las categorías",
+  "wave.issues.allComplexities": "Todas las complejidades",
+  "wave.issues.allStatuses": "Todos los estados",
+  "wave.issues.col.id": "ID",
+  "wave.issues.col.title": "Título",
+  "wave.issues.col.category": "Categoría",
+  "wave.issues.col.complexity": "Complejidad",
+  "wave.issues.col.points": "Puntos",
+  "wave.issues.col.status": "Estado",
+  "wave.issues.viewPr": "Ver PR #{number}",
+  "wave.issues.col.contributor": "Colaborador",
+
+  "calls.title": "Notas de las llamadas de la comunidad",
+  "calls.description": "Notas, decisiones y grabaciones de llamadas anteriores de la comunidad y de gobernanza.",
+  "calls.empty": "Todavía no se han publicado notas de llamadas.",
+  "calls.recording": "Grabación / transcripción",
+  "calls.decisions": "Decisiones",
+} as const satisfies Record<keyof typeof import("./en").en, string>;

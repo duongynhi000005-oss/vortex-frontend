@@ -37,6 +37,9 @@ registrations. Part of the multi-repo Vortex stack — see also
 | `/privacy` | `src/app/privacy/page.tsx` | Privacy & local-data center: inventory, export, clear, private mode |
 | `/api/contributors` | `src/app/api/contributors/route.ts` | Cached server-side proxy for GitHub contributors (1 h revalidate, stale-while-error) |
 | `/api/health` | `src/app/api/health/route.ts` | JSON `{ status, version, commit, uptime }` for the uptime monitor; no secrets or config |
+| `/api/issue-prs` | `src/app/api/issue-prs/route.ts` | Resolves completed Wave issue numbers (`?ids=1,2`) to their merged closing PR via the GitHub timeline API (1 h cache, fails soft to no link) |
+| `/governance/archive/export` | `src/app/governance/archive/export/route.ts` | `text/csv` download of the archive rows matching the active filters (same filter code as the page, formula-injection safe, capped at 5000 rows) |
+| `/governance/calls` | `src/app/governance/calls/page.tsx` | Static archive of community call notes from `docs/calls/*.md` (see `docs/community-calls.md`) |
 
 ---
 
@@ -104,7 +107,7 @@ Optional, **server-only** (never prefix with `NEXT_PUBLIC_`):
 
 | Variable       | Purpose |
 | -------------- | ------- |
-| `GITHUB_TOKEN` | Raises the GitHub API rate limit for `/api/contributors` (read-only, no scopes needed). Without it the route still works, and falls back to the last good response or a bundled snapshot when rate-limited. |
+| `GITHUB_TOKEN` | Raises the GitHub API rate limit for `/api/contributors` and `/api/issue-prs` (read-only, no scopes needed). Without it the route still works, and falls back to the last good response or a bundled snapshot when rate-limited. |
 
 ---
 

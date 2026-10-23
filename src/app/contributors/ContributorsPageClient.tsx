@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Nav } from "@/components/Nav";
 import type { ComplexityTier, IssueStatus, WaveMetrics } from "@/lib/issuesParser";
 import { useTranslation } from "@/lib/i18n/I18nProvider";
@@ -34,6 +34,25 @@ export default function ContributorsPageClient({ metrics }: { metrics: WaveMetri
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [goodFirstOnly, setGoodFirstOnly] = useState(false);
+  const [prLinks, setPrLinks] = useState<Record<number, string>>({});
+
+  // Fail soft: if the lookup is unavailable, issues render without a PR link.
+  useEffect(() => {
+    const ids = metrics.issues.filter((i) => i.status === "Completed").map((i) => i.id).slice(0, 50);
+    if (ids.length === 0 || typeof fetch !== "function") return;
+    const controller = new AbortController();
+    (async () => {
+      try {
+        const res = await fetch(`/api/issue-prs?ids=${ids.join(",")}`, { signal: controller.signal });
+        if (!res.ok) return;
+        const data = (await res.json()) as { links?: Record<number, string> };
+        if (data && typeof data.links === "object" && data.links) setPrLinks(data.links);
+      } catch {
+        /* no PR links */
+      }
+    })();
+    return () => controller.abort();
+  }, [metrics.issues]);
 
   const filteredIssues = metrics.issues.filter((issue) => {
     if (selectedCategory !== "all" && issue.category !== selectedCategory) return false;
@@ -347,6 +366,16 @@ export default function ContributorsPageClient({ metrics }: { metrics: WaveMetri
                       >
                         {t(STATUS_LABEL_KEY[issue.status])}
                       </span>
+                      {issue.status === "Completed" && prLinks[issue.id]?.startsWith("https://github.com/") && (
+                        <a
+                          href={prLinks[issue.id]}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="ml-2 text-vx-sage underline focus-visible:outline focus-visible:outline-2"
+                        >
+                          {t("wave.issues.viewPr", { number: prLinks[issue.id]!.split("/").pop() ?? "" })}
+                        </a>
+                      )}
                     </td>
                     <td className="px-5 py-3.5 font-mono text-vx-muted">
                       {issue.contributor ? truncateAddress(issue.contributor) : "—"}

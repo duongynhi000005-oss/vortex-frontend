@@ -4,32 +4,15 @@ import { notFound } from 'next/navigation';
 import { bucketProposalsByMonth, getGovernanceProposals } from '@/lib/governanceStore';
 import { BarChart } from '@/components/charts';
 import { isValidStellarAddress } from '@/lib/stellarAddress';
-import { toCsv } from '@/lib/csv';
-
-const STATUSES = ['all', 'passed', 'rejected', 'expired', 'executed'] as const;
-type Status = (typeof STATUSES)[number];
+import { buildCsv } from '@/lib/csv';
+import {
+  ARCHIVE_STATUSES as STATUSES,
+  filterArchiveProposals,
+  parseStatus,
+  type ArchiveSearchParams,
+} from '@/lib/governanceArchive';
 
 const PAGE_SIZE = 10;
-
-interface ArchiveSearchParams {
-  status?: string;
-  category?: string;
-  from?: string;
-  to?: string;
-  q?: string;
-  sort?: string;
-  page?: string;
-}
-
-function parseStatus(value?: string): Status {
-  return STATUSES.includes((value ?? '') as Status) ? (value as Status) : 'all';
-}
-
-function parseDate(value?: string): number | null {
-  if (!value) return null;
-  const ts = Date.parse(value);
-  return Number.isNaN(ts) ? null : ts;
-}
 
 function parsePage(value?: string): number {
   const n = Number.parseInt(value ?? '1', 10);
@@ -61,29 +44,10 @@ export default async function GovernanceArchivePage({
 }) {
   const status = parseStatus(searchParams.status);
   const category = searchParams.category?.trim() || 'all';
-  const from = parseDate(searchParams.from);
-  const to = parseDate(searchParams.to);
-  const query = searchParams.q?.trim().toLowerCase() ?? '';
   const sort = searchParams.sort === 'oldest' ? 'oldest' : 'newest';
   const page = parsePage(searchParams.page);
 
-  const all = getGovernanceProposals();
-
-  const filtered = all.filter((p) => {
-    if (status !== 'all' && p.status !== status) return false;
-    if (category !== 'all' && p.category !== category) return false;
-    const created = p.createdAt ? Date.parse(p.createdAt) : null;
-    if (from !== null && created !== null && created < from) return false;
-    if (to !== null && created !== null && created > to) return false;
-    if (query && !`${p.title} ${p.summary ?? ''}`.toLowerCase().includes(query)) return false;
-    return true;
-  });
-
-  filtered.sort((a, b) => {
-    const at = a.createdAt ? Date.parse(a.createdAt) : 0;
-    const bt = b.createdAt ? Date.parse(b.createdAt) : 0;
-    return sort === 'oldest' ? at - bt : bt - at;
-  });
+  const filtered = filterArchiveProposals(getGovernanceProposals(), searchParams);
 
   const timeline = bucketProposalsByMonth(filtered);
 
@@ -101,7 +65,9 @@ export default async function GovernanceArchivePage({
     return qs ? `/governance/archive?${qs}` : '/governance/archive';
   };
 
-  const csvHref = `${buildHref({})}${buildHref({}).includes('?') ? '&' : '?'}format=csv`;
+  // CSV is served by the sibling route handler (`export/route.ts`) and covers
+  // every matching row (capped), not just the current page.
+  const csvHref = buildHref({ page: '1' }).replace('/governance/archive', '/governance/archive/export');
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-8">
@@ -202,19 +168,19 @@ export default async function GovernanceArchivePage({
               <dl className="mt-2 grid grid-cols-2 gap-2 text-xs text-muted-foreground sm:grid-cols-4">
                 <div>
                   <dt>For</dt>
-                  <dd>{p.tally?.for ?? 0}</dd>
+                  <dd>{p.votesFor}</dd>
                 </div>
                 <div>
                   <dt>Against</dt>
-                  <dd>{p.tally?.against ?? 0}</dd>
+                  <dd>{p.votesAgainst}</dd>
                 </div>
                 <div>
                   <dt>Abstain</dt>
-                  <dd>{p.tally?.abstain ?? 0}</dd>
+                  <dd>{p.votesAbstain ?? 0}</dd>
                 </div>
                 <div>
                   <dt>Execution</dt>
-                  <dd>{p.executed ? 'Executed' : 'Not executed'}</dd>
+                  <dd>{p.status === 'executed' ? 'Executed' : 'Not executed'}</dd>
                 </div>
               </dl>
             </li>
@@ -247,7 +213,10 @@ export default async function GovernanceArchivePage({
 
 export function VoterHistory({ address, votes }: { address: string; votes: Array<{ proposalId: string; choice: string; weight: string; timestamp: string }> }) {
   if (!isValidStellarAddress(address)) notFound();
-  const csv = toCsv(votes.map((v) => ({ proposalId: v.proposalId, choice: v.choice, weight: v.weight, timestamp: v.timestamp })));
+  const csv = buildCsv(
+    ['proposalId', 'choice', 'weight', 'timestamp'],
+    votes.map((v) => [v.proposalId, v.choice, v.weight, v.timestamp]),
+  );
   return (
     <section>
       <h2 className="text-lg font-semibold">Voter history</h2>

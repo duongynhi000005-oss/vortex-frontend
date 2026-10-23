@@ -87,3 +87,21 @@ describe("placeholders", () => {
     }
   });
 });
+
+describe("governance.* and wave.* catalog parity", () => {
+  const scoped = Object.keys(en).filter((k) => /^(governance|wave)\./.test(k));
+  const tokens = (s: string) => [...s.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort();
+
+  it("covers the governance impact and wave namespaces", () => {
+    expect(scoped.length).toBeGreaterThan(0);
+    expect(scoped).toContain("governance.impact.basis");
+    expect(scoped).toContain("wave.title");
+  });
+
+  it.each(scoped)("%s has a translated es value with matching placeholders", (key) => {
+    const enValue = (CATALOGS.en as Record<string, string>)[key]!;
+    const esValue = (CATALOGS.es as Record<string, string>)[key];
+    expect(esValue).toBeTruthy();
+    expect(tokens(esValue!)).toEqual(tokens(enValue));
+  });
+});
