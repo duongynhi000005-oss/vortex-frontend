@@ -10,6 +10,8 @@ updates:
       time: "06:00"
       timezone: "UTC"
     open-pull-requests-limit: 10
+    reviewers:
+      - "Barbieple-Devstem"
     labels:
       - "dependencies"
     commit-message:
@@ -73,6 +75,9 @@ updates:
       day: "monday"
       time: "06:00"
       timezone: "UTC"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "Barbieple-Devstem"
     labels:
       - "dependencies"
       - "ci"
