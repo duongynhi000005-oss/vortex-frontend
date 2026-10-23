@@ -64,7 +64,7 @@ jobs:
           find .next -name '*.map' -delete
 
       - name: Upload build artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: nextjs-build-${{ steps.build.outputs.build-id }}
           path: .next
@@ -101,7 +101,7 @@ jobs:
         run: npm ci
 
       - name: Download build artifact
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v4
         with:
           name: nextjs-build-${{ needs.build.outputs.build-id }}
           path: .next

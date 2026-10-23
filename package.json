@@ -32,6 +32,7 @@
     "check:deps": "node scripts/check-dependency-policy.mjs",
     "check:provenance": "node scripts/verify-provenance.mjs",
     "sbom": "node scripts/generate-sbom.mjs sbom.json",
+    "changelog": "node scripts/generate-changelog.mjs",
     "dependency-report": "node scripts/dependency-diff-report.mjs",
     "build:storybook": "storybook build --quiet",
     "test:storybook": "test-storybook --url http://127.0.0.1:6006",
