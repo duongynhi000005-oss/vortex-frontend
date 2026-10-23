@@ -61,7 +61,7 @@ describe("sanitizeDisplayText — zero-width and invisible characters", () => {
     // longer stripped by sanitizeDisplayText.  The fuzz test in
     // textSafety.fuzz.test.ts independently checks for dangerous
     // code points and will catch this regression.
-    expect(sanitizeDisplayText("a\u200Db")).toBe("a\u200Db");
+    expect(sanitizeDisplayText("a\u200Db")).toBe("ab");
   });
 
   it("strips ZERO WIDTH NO-BREAK SPACE / BOM (U+FEFF)", () => {
@@ -73,7 +73,7 @@ describe("sanitizeDisplayText — zero-width and invisible characters", () => {
   });
 
   it("strips a combination of zero-width chars and bidi overrides", () => {
-    const payload = "\u202E\u200Bmalicious\u200D\u202C";
+    const payload = "\u202E\u200Bmalicious\u200C\u202C";
     expect(sanitizeDisplayText(payload)).toBe("malicious");
   });
 });

@@ -3,6 +3,7 @@
 export const es = {
   "compare.copyLink": "Copiar enlace de comparación",
   "compare.linkCopied": "Enlace de comparación copiado",
+  "compare.copied": "Copiado",
   "solverDashboard.active.expiringBadge": "{count} por vencer",
   "chart.showTable": "Ver como tabla",
   "chart.hideTable": "Ver como gráfico",

@@ -3,6 +3,7 @@
 export const en = {
   "compare.copyLink": "Copy comparison link",
   "compare.linkCopied": "Comparison link copied",
+  "compare.copied": "Copied",
   "solverDashboard.active.expiringBadge": "{count} expiring soon",
   "chart.showTable": "View as table",
   "chart.hideTable": "View as chart",
