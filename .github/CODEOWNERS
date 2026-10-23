@@ -23,6 +23,11 @@
 /src/lib/solver* @Barbieple-Devstem
 /src/hooks/useSolver* @Barbieple-Devstem
 
+# Relay contract snapshot and generator
+/spec/ @Barbieple-Devstem
+/src/lib/generated/ @Barbieple-Devstem
+/scripts/gen-api.mjs @Barbieple-Devstem
+
 # Workflows and CI/CD configuration
 /.github/workflows/ @Barbieple-Devstem
 /.github/dependabot.yml @Barbieple-Devstem

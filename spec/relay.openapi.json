@@ -1,0 +1,177 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Vortex Relay API",
+    "version": "0.1.0",
+    "description": "Frontend contract snapshot. Hand-authored bootstrap derived from docs/websocket-protocol.md and src/test/fixtures/api.ts until the backend publishes its document. Replace with the backend export on the first sync (see docs/api-contract.md).",
+    "x-source": {
+      "repository": "vortex-protocol/vortex-backend",
+      "commit": "unversioned (hand-authored bootstrap)"
+    }
+  },
+  "paths": {
+    "/intents/feed": {
+      "get": {
+        "operationId": "listIntentFeed",
+        "responses": {
+          "200": {
+            "description": "Recent intents",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/FeedItem" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/intents/open": {
+      "get": {
+        "operationId": "listOpenIntents",
+        "responses": {
+          "200": {
+            "description": "Open-auction queue",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/OpenIntent" }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "IntentStatus": {
+        "type": "string",
+        "description": "Intent lifecycle state. Values the client does not recognise parse to \"unknown\".",
+        "enum": ["pending", "accepted", "filled", "failed"]
+      },
+      "FeedItem": {
+        "type": "object",
+        "description": "Canonical intent record shared by the REST feed and WebSocket frames.",
+        "required": ["id", "srcChain", "srcToken", "srcAmount", "dstToken", "solver", "status", "createdAt"],
+        "properties": {
+          "id": { "type": "string", "description": "Unique intent identifier" },
+          "srcChain": { "type": "string", "description": "Source chain identifier" },
+          "srcToken": { "type": "string", "description": "Source asset symbol" },
+          "srcAmount": {
+            "type": "string",
+            "pattern": "^[0-9]+(\\.[0-9]+)?$",
+            "description": "Human-readable decimal amount. Always a string, never a number."
+          },
+          "dstToken": { "type": "string", "description": "Destination asset symbol" },
+          "solver": { "type": "string", "description": "Solver name or address" },
+          "status": { "$ref": "#/components/schemas/IntentStatus" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "deadline": { "type": "string", "format": "date-time" },
+          "version": { "type": "integer", "description": "Monotonic per-intent version, when the relay sends one" },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "IntentDetail": {
+        "type": "object",
+        "description": "Single-intent detail view. Repeats the FeedItem fields plus settlement details.",
+        "required": [
+          "id",
+          "srcChain",
+          "srcToken",
+          "srcAmount",
+          "dstToken",
+          "solver",
+          "status",
+          "createdAt",
+          "dstAmount",
+          "minOut",
+          "dstAddress"
+        ],
+        "properties": {
+          "id": { "type": "string", "description": "Unique intent identifier" },
+          "srcChain": { "type": "string", "description": "Source chain identifier" },
+          "srcToken": { "type": "string", "description": "Source asset symbol" },
+          "srcAmount": {
+            "type": "string",
+            "pattern": "^[0-9]+(\\.[0-9]+)?$",
+            "description": "Human-readable decimal amount. Always a string, never a number."
+          },
+          "dstToken": { "type": "string", "description": "Destination asset symbol" },
+          "solver": { "type": "string", "description": "Solver name or address" },
+          "status": { "$ref": "#/components/schemas/IntentStatus" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "deadline": { "type": "string", "format": "date-time" },
+          "version": { "type": "integer", "description": "Monotonic per-intent version, when the relay sends one" },
+          "updatedAt": { "type": "string", "format": "date-time" },
+          "dstAmount": {
+            "type": "string",
+            "pattern": "^[0-9]+(\\.[0-9]+)?$",
+            "description": "Settled destination amount as a decimal string"
+          },
+          "minOut": {
+            "type": "string",
+            "pattern": "^[0-9]+(\\.[0-9]+)?$",
+            "description": "Minimum acceptable destination amount as a decimal string"
+          },
+          "dstAddress": { "type": "string", "description": "Destination account (Stellar strkey)" }
+        }
+      },
+      "OpenIntent": {
+        "type": "object",
+        "description": "Intent waiting in the solver open-auction queue.",
+        "required": ["id", "srcChain", "srcToken", "srcAmount", "dstToken", "minOut", "deadline"],
+        "properties": {
+          "id": { "type": "string", "description": "Unique intent identifier" },
+          "srcChain": { "type": "string", "description": "Source chain identifier" },
+          "srcToken": { "type": "string", "description": "Source asset symbol" },
+          "srcAmount": {
+            "type": "string",
+            "pattern": "^[0-9]+(\\.[0-9]+)?$",
+            "description": "Human-readable decimal amount. Always a string, never a number."
+          },
+          "dstToken": { "type": "string", "description": "Destination asset symbol" },
+          "minOut": {
+            "type": "string",
+            "pattern": "^[0-9]+(\\.[0-9]+)?$",
+            "description": "Minimum acceptable destination amount as a decimal string"
+          },
+          "deadline": { "type": "string", "format": "date-time" }
+        }
+      },
+      "IntentEnvelope": {
+        "type": "object",
+        "description": "Wrapped WebSocket frame carrying one intent update.",
+        "required": ["type", "data"],
+        "properties": {
+          "type": { "type": "string", "const": "intent" },
+          "data": { "$ref": "#/components/schemas/FeedItem" }
+        }
+      },
+      "IntentOpenEvent": {
+        "type": "object",
+        "description": "WebSocket event: a new or updated open intent.",
+        "required": ["type", "intent"],
+        "properties": {
+          "type": { "type": "string", "const": "intent.open" },
+          "intent": { "$ref": "#/components/schemas/OpenIntent" },
+          "serverTime": { "type": "string", "format": "date-time" }
+        }
+      },
+      "IntentClosedEvent": {
+        "type": "object",
+        "description": "WebSocket event: an open intent was accepted, cancelled or expired.",
+        "required": ["type", "id"],
+        "properties": {
+          "type": { "type": "string", "const": "intent.closed" },
+          "id": { "type": "string", "description": "Unique intent identifier" },
+          "serverTime": { "type": "string", "format": "date-time" }
+        }
+      }
+    }
+  }
+}

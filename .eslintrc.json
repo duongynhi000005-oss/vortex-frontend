@@ -1,5 +1,6 @@
 {
   "extends": "next/core-web-vitals",
+  "ignorePatterns": ["src/lib/generated/**"],
   "rules": {
     "no-console": "error",
     "no-restricted-globals": [

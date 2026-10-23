@@ -18,6 +18,7 @@ Closes #
 - [ ] `npm run typecheck` (`tsc --noEmit`) passes cleanly
 - [ ] `npm test` and `npm run test:coverage` pass
 - [ ] `npm run build` passes
+- [ ] `npm run check:contract` passes (generated relay contract matches the snapshot)
 - [ ] Verified on local / staging environment with seeded data (where applicable)
 
 ## Preview
@@ -33,3 +34,4 @@ Closes #
 - [ ] Added or updated tests for new behaviour
 - [ ] No secrets or credentials committed (used `.env.example` / `.env.staging.example` templates)
 - [ ] PR title follows conventional commits (`feat:`, `fix:`, `chore:`, etc.)
+- [ ] Spec updated: if the relay contract changed, `spec/relay.openapi.json` was refreshed and `npm run gen:api` was re-run (see `docs/api-contract.md`). N/A otherwise.

@@ -1,0 +1,40 @@
+name: Contract drift
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Daily check against the backend's latest published spec
+    - cron: "30 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contract-drift:
+    name: Contract drift (relay OpenAPI)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+      # RELAY_SPEC_URL is a repository variable pointing at the backend's current spec
+      # (raw file or release asset). Without it only the generated output is checked.
+      - name: Check generated output and backend spec
+        env:
+          RELAY_SPEC_URL: ${{ vars.RELAY_SPEC_URL }}
+        run: |
+          set -euo pipefail
+          if [ -n "$RELAY_SPEC_URL" ]; then
+            curl --fail --silent --show-error --location --max-time 30 \
+              --output "$RUNNER_TEMP/relay.openapi.json" "$RELAY_SPEC_URL"
+            node scripts/gen-api.mjs --check --upstream "$RUNNER_TEMP/relay.openapi.json"
+          else
+            echo "::warning::RELAY_SPEC_URL is not set; checking generated output only."
+            node scripts/gen-api.mjs --check
+          fi

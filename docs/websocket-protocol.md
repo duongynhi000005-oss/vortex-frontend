@@ -155,9 +155,10 @@ tearing down the socket subscription for that intent, and sets SWR's
 ## Backend Reference
 
 If the canonical schema lives in [vortex-backend](https://github.com/vortex-protocol/vortex-backend),
-link it here and keep the frontend types in sync. If the schema diverges, update the
-`FeedItem` type in `src/lib/types.ts` and the corresponding tests in
-`src/hooks/useLiveIntents.test.ts` and `src/hooks/useIntentFeed.test.ts`.
+link it here and keep the frontend types in sync. The frontend contract is the snapshot in
+`spec/relay.openapi.json`; `FeedItem` and the frame types in `src/lib/types.ts` and their parsers in
+`src/lib/schemas.ts` are generated from it. When the schema changes, follow
+[docs/api-contract.md](./api-contract.md).
 
 ## Open-Intent Queue Events
 

@@ -12,6 +12,8 @@
     "lint": "next lint",
     "check:editorconfig": "editorconfig-checker",
     "check:env": "node scripts/check-env-vars.mjs",
+    "gen:api": "node scripts/gen-api.mjs",
+    "check:contract": "node scripts/gen-api.mjs --check",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",

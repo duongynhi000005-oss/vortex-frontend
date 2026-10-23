@@ -15,6 +15,8 @@ export default defineConfig({
       provider: "v8",
       reporter: ["text", "html", "lcov"],
       reportsDirectory: "./coverage",
+      // Generated from spec/relay.openapi.json; covered by `npm run check:contract`, not unit tests.
+      exclude: ["src/lib/generated/**"],
       thresholds: {
         "src/lib/**": { lines: 90, functions: 90, branches: 85, statements: 90 },
         "src/hooks/**": { lines: 85, functions: 85, branches: 80, statements: 85 },
