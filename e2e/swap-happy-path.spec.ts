@@ -1,4 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
+import { getResponse } from "msw";
+import { createHandlers } from "../src/mocks/handlers";
+import { MOCK_SCENARIOS } from "../src/mocks/scenarios";
 
 const API_URL = "http://localhost:4000";
 const PUBLIC_KEY = "GDEMOE2ESMOKETESTPUBLICKEY000000000000000000000";
@@ -42,35 +45,32 @@ async function mockFreighter(page: Page) {
   }, PUBLIC_KEY);
 }
 
+// Route fulfilment goes through the shared MSW handlers (src/mocks/handlers.ts)
+// so the spec and `npm run dev:mock` cannot drift apart. The "empty" scenario
+// keeps the public feed empty, which is the state this flow was written against.
+const handlers = createHandlers(MOCK_SCENARIOS.empty);
+
 async function mockBackend(page: Page) {
   await page.route(
-    (url) => url.origin === API_URL && url.pathname === "/intents/feed",
-    (route) => route.fulfill({ json: [] })
-  );
+    (url) => url.origin === API_URL,
+    async (route) => {
+      const request = route.request();
+      const response = await getResponse(
+        handlers,
+        new Request(request.url(), {
+          method: request.method(),
+          headers: request.headers(),
+          body: request.postData() ?? undefined,
+        })
+      );
+      if (!response) return route.fallback();
 
-  await page.route(
-    (url) => url.origin === API_URL && url.pathname === "/quote",
-    (route) =>
-      route.fulfill({
-        json: {
-          dstAmount: "497.1234",
-          solver: "Beta Liquidity Co",
-          fillTimeSeconds: 32,
-          priceImpactPct: 0.12,
-          protocolFeePct: 0.05,
-          rate: "1 USDC = 8.4600 XLM",
-        },
-      })
-  );
-
-  await page.route(
-    (url) => url.origin === API_URL && url.pathname === "/intents",
-    (route) => route.fulfill({ json: { intentId: "intent-1", unsignedXdr: "unsigned-xdr" } })
-  );
-
-  await page.route(
-    (url) => url.origin === API_URL && url.pathname === "/intents/intent-1/submit",
-    (route) => route.fulfill({ json: { intentId: "intent-1", status: "pending" } })
+      await route.fulfill({
+        status: response.status,
+        headers: Object.fromEntries(response.headers),
+        body: await response.text(),
+      });
+    }
   );
 }
 

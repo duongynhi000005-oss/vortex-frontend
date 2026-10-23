@@ -5,6 +5,7 @@ import { WalletHydrator } from "@/components/WalletHydrator";
 import { ToastViewport } from "@/components/ToastViewport";
 import { IntentStatusWatcher } from "@/components/IntentStatusWatcher";
 import { OriginTrustBanner } from "@/components/OriginTrustBanner";
+import { MockApiGate } from "@/mocks/MockApiGate";
 import { I18nProvider } from "@/lib/i18n/I18nProvider";
 import { DEFAULT_LOCALE, LOCALE_HEADER, isLocale, type Locale } from "@/lib/i18n";
 
@@ -162,14 +163,16 @@ export default async function RootLayout({
           Skip to main content
         </a>
         <I18nProvider locale={locale}>
-          <GlobalErrorCapture />
-          <WalletHydrator />
-          <IntentStatusWatcher />
-          {children}
-          <CommandPalette />
-          <ToastViewport />
-          <ConnectivityBanner />
-          <OriginTrustBanner />
+          <MockApiGate>
+            <GlobalErrorCapture />
+            <WalletHydrator />
+            <IntentStatusWatcher />
+            {children}
+            <CommandPalette />
+            <ToastViewport />
+            <ConnectivityBanner />
+            <OriginTrustBanner />
+          </MockApiGate>
         </I18nProvider>
       </body>
     </html>

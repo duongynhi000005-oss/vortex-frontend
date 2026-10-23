@@ -221,6 +221,41 @@ FUZZ_RUNS=10000 FUZZ_SEED=42 npm test
 
 A nightly scheduled job (`cron: "0 3 * * *"`) runs the extended fuzz suite with `FUZZ_RUNS=10000` and a 5-minute timeout.  The random seed used is logged in the job output for reproducibility.  Corpus artifacts are uploaded on failure.
 
+## Mock API (MSW)
+
+`src/mocks/` holds one MSW route table for the relay REST API. The same handlers
+serve the browser (`npm run dev:mock`), Vitest (`src/mocks/server.ts`, started by
+`vitest.setup.ts`) and Playwright (`getResponse` in `e2e/swap-happy-path.spec.ts`).
+
+- **Handlers:** `src/mocks/handlers.ts` (`createHandlers(scenario)`)
+- **Fixtures:** `src/mocks/fixtures.ts` — seeded generators (`createRng`, `createFeed`, `createQuote`, `createSolver`) and the in-memory `MockDb`
+- **Scenarios:** `src/mocks/scenarios.ts`
+- **Browser:** `src/mocks/browser.ts` + `MockApiGate` (wired in `src/app/layout.tsx`, inert unless `NEXT_PUBLIC_MOCK_API=1` outside production)
+
+### Scenario catalogue
+
+Select in the browser with `?mock=<name>` on `npm run dev:mock`.
+
+| Scenario  | Feed rows | Latency | Behaviour                          |
+| --------- | --------- | ------- | ---------------------------------- |
+| `default` | 12        | none    | Normal responses                   |
+| `empty`   | 0         | none    | Empty lists                        |
+| `error`   | 0         | none    | Every mocked request returns 500   |
+| `slow`    | 12        | 2 s     | Normal responses after a delay     |
+| `large`   | 5,000     | none    | Large feed for virtual-list checks |
+
+### Stateful behaviour
+
+- `POST /intents` adds the intent to `GET /intents` and to the top of `GET /intents/feed`.
+- `POST /intents/:id/submit` moves the intent to `pending`.
+- Unknown intent IDs return 404.
+
+### Limits
+
+- The mock WebSocket server is not implemented yet; live-update UI will not receive pushed transitions in `dev:mock`.
+- Fixtures are not yet validated against the runtime schemas in `src/lib/schemas.ts`.
+- Storybook is not wired to MSW yet.
+
 ## Explore virtual list (#444)
 
 `src/components/VirtualList.tsx` is a reusable windowed list (single-column

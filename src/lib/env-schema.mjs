@@ -88,6 +88,15 @@ export const ENV_SCHEMA = [
     validate: urlValidator(["http:", "https:"], "https:", "https://relay.example.com"),
   },
   {
+    name: "NEXT_PUBLIC_MOCK_API",
+    key: "mockApi",
+    description: "Set to `1` by `npm run dev:mock` to serve the MSW mock API in the browser (ignored in production builds)",
+    example: "1",
+    default: null,
+    allowEmpty: true,
+    validate: () => null,
+  },
+  {
     name: "NEXT_PUBLIC_WS_URL",
     key: "wsUrl",
     description: "WebSocket URL of the relay (usually with `/ws` path); unset disables live updates",

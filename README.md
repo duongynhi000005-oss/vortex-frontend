@@ -84,6 +84,8 @@ npm run dev    # http://localhost:3000
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md) for the 10-minute quick start and the common-failures table.
 
+**Running without a backend:** `npm run dev:mock` serves the frontend against the in-browser MSW mock API (`src/mocks/`), so no relay is needed. Append `?mock=empty`, `?mock=error`, `?mock=slow` or `?mock=large` to a URL to reproduce those UI states. See [docs/testing.md](docs/testing.md#mock-api-msw) for the scenario catalogue.
+
 ### Required Environment Variables
 
 | Variable                               | Where to get the value                                        |
@@ -95,6 +97,7 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) for the 10-minute quick start and the c
 | `NEXT_PUBLIC_SOLVER_REGISTRY_CONTRACT` | Solver registry contract ID from `vortex-contract` deployment |
 | `NEXT_PUBLIC_SITE_URL`                 | Canonical site origin, used for absolute Open Graph image URLs |
 | `NEXT_PUBLIC_SLASH_EVENTS_MOCK`        | Optional. `true` serves mock penalty events until the relay exposes `/slash-events` |
+| `NEXT_PUBLIC_MOCK_API`                 | Optional. Set to `1` by `npm run dev:mock` to serve the MSW mock API (see [docs/testing.md](docs/testing.md#mock-api-msw)) |
 
 Optional, **server-only** (never prefix with `NEXT_PUBLIC_`):
 
@@ -169,6 +172,7 @@ If preview-specific variables are not set, the workflow uses sensible defaults p
 | Script                       | Description                                                       |
 | ---------------------------- | ----------------------------------------------------------------- |
 | `npm run dev`                | Start Next.js local development server                            |
+| `npm run dev:mock`           | Start the dev server against the MSW mock API (no relay needed; `?mock=empty\|error\|slow\|large`) |
 | `npm run build`              | Compile and bundle production application                         |
 | `npm run start`              | Serve production build locally                                    |
 | `npm run lint`               | Run ESLint across codebase                                        |
