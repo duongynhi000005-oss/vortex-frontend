@@ -48,8 +48,8 @@ export function buildIntentsCsv(intents: FeedItem[], columns: readonly string[] 
   return [headers.join(","), ...rows].join("\n");
 }
 
-export function downloadCsv(filename: string, csv: string) {
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+export function downloadCsv(filename: string, csv: string, mimeType = "text/csv;charset=utf-8") {
+  const blob = new Blob([csv], { type: mimeType });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;

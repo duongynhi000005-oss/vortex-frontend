@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Nav } from "@/components/Nav";
 import { Footer } from "@/components/Footer";
@@ -13,14 +13,17 @@ import { useToastStore } from "@/store/toast";
 import { useTranslation } from "@/lib/i18n/I18nProvider";
 import { ApiError } from "@/lib/api";
 import { timeRemaining } from "@/lib/time";
+import { downloadCsv } from "@/lib/csv";
 import { computeSolverStats, estimateEarnings, formatDecimal, parseDecimal, SOLVER_FEE_BPS } from "@/lib/solverStats";
 import {
   MIN_BOND_USD,
   activeIntents,
   bondHealth,
+  buildSolverDashboardExport,
   expiringSoon,
   fillCounts,
   inactiveReasons,
+  solverDashboardCsv,
 } from "@/lib/solverDashboard";
 import { BarChart } from "@/components/charts/BarChart";
 
@@ -76,6 +79,7 @@ export default function SolverDashboardPage() {
   const [notifyExpiry, setNotifyExpiry] = usePersistedFlag(NOTIFY_EXPIRY_KEY);
   const [now, setNow] = useState(() => Date.now());
   const notified = useRef(new Set<string>());
+  const hiddenHintId = useId();
 
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 30_000);
@@ -88,6 +92,26 @@ export default function SolverDashboardPage() {
   const stats30 = useMemo(() => computeSolverStats(myFills, 30, now), [myFills, now]);
   const earnings = useMemo(() => estimateEarnings(myFills), [myFills]);
   const expiring = useMemo(() => expiringSoon(active, now), [active, now]);
+
+  const exportStats = (format: "csv" | "json") => {
+    if (!solver || !counts) return;
+    const data = buildSolverDashboardExport(
+      {
+        address: solver.address,
+        bondUsd: solver.bondUsd,
+        fills: counts,
+        successRatePct: stats30.successRatePct,
+        earnings,
+      },
+      new Date().toISOString(),
+    );
+    const stamp = data.generatedAt.slice(0, 10);
+    if (format === "csv") {
+      downloadCsv(`vortex-solver-dashboard-${stamp}.csv`, solverDashboardCsv(data));
+    } else {
+      downloadCsv(`vortex-solver-dashboard-${stamp}.json`, JSON.stringify(data, null, 2), "application/json;charset=utf-8");
+    }
+  };
 
   useEffect(() => {
     if (!notifyExpiry) return;
@@ -151,6 +175,26 @@ export default function SolverDashboardPage() {
             <input type="checkbox" checked={notifyExpiry} onChange={(e) => setNotifyExpiry(e.target.checked)} className={FOCUS_RING} />
             {t("solverDashboard.notifyExpiry")}
           </label>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 text-xs text-vx-muted">
+          {(["csv", "json"] as const).map((format) => (
+            <button
+              key={format}
+              type="button"
+              onClick={() => exportStats(format)}
+              disabled={hideBalances}
+              aria-describedby={hideBalances ? hiddenHintId : undefined}
+              className={`px-3 py-2 rounded-lg border border-vx-border font-semibold hover:text-vx-text hover:border-vx-sage/40 transition-colors disabled:opacity-50 ${FOCUS_RING}`}
+            >
+              {t(`solverDashboard.export.${format}`)}
+            </button>
+          ))}
+          {hideBalances && (
+            <p id={hiddenHintId} className="text-vx-dim">
+              {t("solverDashboard.export.hiddenHint")}
+            </p>
+          )}
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">

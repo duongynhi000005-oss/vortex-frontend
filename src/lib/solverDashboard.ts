@@ -1,4 +1,5 @@
 import type { FeedItem, Solver } from "@/lib/types";
+import { buildCsv } from "@/lib/csv";
 import { fillsInWindow, normalizeAddress } from "@/lib/solverStats";
 
 /** Matches the registration minimum enforced in SolvePageClient. */
@@ -44,6 +45,56 @@ export function fillCounts(items: FeedItem[], solver: string, now: number = Date
     last7d: fillsInWindow(mine, 7, now).length,
     last30d: fillsInWindow(mine, 30, now).length,
   };
+}
+
+// ── Export ──────────────────────────────────────────────────────────────────
+
+export type SolverDashboardSnapshot = {
+  address: string;
+  bondUsd: number;
+  fills: ReturnType<typeof fillCounts>;
+  successRatePct: number | null;
+  earnings: Array<{ token: string; amount: string }>;
+};
+
+export type SolverDashboardExport = {
+  solver: string;
+  generatedAt: string;
+  bond: { usd: number; minUsd: number; ratio: number; level: BondHealth["level"] };
+  fills: ReturnType<typeof fillCounts>;
+  successRate30dPct: number | null;
+  earnings: Array<{ token: string; amount: string }>;
+};
+
+/** Builds the export from the same values the dashboard renders, so the file matches the screen. */
+export function buildSolverDashboardExport(snapshot: SolverDashboardSnapshot, generatedAt: string): SolverDashboardExport {
+  const bond = bondHealth(snapshot.bondUsd);
+  return {
+    solver: snapshot.address,
+    generatedAt,
+    bond: { usd: snapshot.bondUsd, minUsd: MIN_BOND_USD, ratio: bond.ratio, level: bond.level },
+    fills: snapshot.fills,
+    successRate30dPct: snapshot.successRatePct,
+    earnings: snapshot.earnings,
+  };
+}
+
+export const SOLVER_DASHBOARD_CSV_HEADERS = ["metric", "token", "value"] as const;
+
+/** Flattens the export into `metric,token,value` rows. */
+export function solverDashboardCsv(data: SolverDashboardExport): string {
+  const rows: Array<Array<string | number>> = [
+    ["bond_usd", "", data.bond.usd],
+    ["bond_min_usd", "", data.bond.minUsd],
+    ["bond_ratio", "", data.bond.ratio.toFixed(2)],
+    ["bond_level", "", data.bond.level],
+    ["fills_24h", "", data.fills.last24h],
+    ["fills_7d", "", data.fills.last7d],
+    ["fills_30d", "", data.fills.last30d],
+    ["success_rate_30d_pct", "", data.successRate30dPct ?? ""],
+    ...data.earnings.map((e) => ["earnings", e.token, e.amount]),
+  ];
+  return buildCsv(SOLVER_DASHBOARD_CSV_HEADERS, rows);
 }
 
 export type InactiveReason = "status" | "bondBelowMinimum";
