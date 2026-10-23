@@ -13,7 +13,16 @@ export const MAX_VIEW_NAME_LENGTH = 40;
 
 export type ViewScope = "explore" | "my-intents";
 export type ViewParams = Record<string, string>;
-export type SavedView = { id: string; name: string; scope: ViewScope; params: ViewParams };
+export type SavedView = {
+  id: string;
+  name: string;
+  scope: ViewScope;
+  params: ViewParams;
+  /** ISO timestamp of when the view was created; absent on legacy entries. */
+  createdAt?: string;
+  /** ISO timestamp of when the view was last applied; absent means "never". */
+  lastUsedAt?: string;
+};
 export type BuiltInView = { id: string; nameKey: MessageKey; scopes: ViewScope[]; params: ViewParams };
 
 export const BUILT_IN_VIEWS: readonly BuiltInView[] = [
@@ -79,6 +88,33 @@ export function viewParamsToSearch(params: ViewParams): string {
   return qs ? `?${qs}` : "";
 }
 
+/**
+ * Extracts the query params from a pasted shared-view URL or bare query string.
+ * Returns `null` when the input cannot be parsed as a URL/query at all.
+ */
+export function parseViewImport(input: string): ViewParams | null {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+  let search: string;
+  if (trimmed.startsWith("?")) {
+    search = trimmed;
+  } else if (/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)) {
+    try {
+      search = new URL(trimmed).search;
+    } catch {
+      return null;
+    }
+  } else if (trimmed.includes("=")) {
+    // Bare query string without a leading "?".
+    search = `?${trimmed}`;
+  } else {
+    return null;
+  }
+  const params: ViewParams = {};
+  for (const [key, value] of new URLSearchParams(search)) params[key] = value;
+  return params;
+}
+
 /** Sanitises a user-supplied view name and resolves collisions with " (2)", " (3)"... */
 export function normalizeViewName(raw: string, existing: readonly string[]): string {
   const base = sanitizeDisplayText(raw).replace(/\s+/g, " ").trim().slice(0, MAX_VIEW_NAME_LENGTH);
@@ -105,6 +141,13 @@ function isSavedView(value: unknown): value is SavedView {
   );
 }
 
+/** Returns a valid ISO timestamp string, or `undefined` for missing/invalid values. */
+function sanitizeTimestamp(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const time = Date.parse(value);
+  return Number.isNaN(time) ? undefined : new Date(time).toISOString();
+}
+
 type PersistedViews = { views: SavedView[] };
 
 function isPersistedViews(value: unknown): value is PersistedViews {
@@ -116,11 +159,17 @@ export function sanitizeViews(value: PersistedViews): PersistedViews {
   const views = (value.views as unknown[])
     .filter(isSavedView)
     .slice(0, MAX_VIEWS)
-    .map((v) => ({
-      ...v,
-      name: sanitizeDisplayText(v.name).slice(0, MAX_VIEW_NAME_LENGTH),
-      params: sanitizeViewParams(v.scope, v.params).params,
-    }));
+    .map((v) => {
+      const createdAt = sanitizeTimestamp(v.createdAt);
+      const lastUsedAt = sanitizeTimestamp(v.lastUsedAt);
+      return {
+        ...v,
+        name: sanitizeDisplayText(v.name).slice(0, MAX_VIEW_NAME_LENGTH),
+        params: sanitizeViewParams(v.scope, v.params).params,
+        ...(createdAt ? { createdAt } : {}),
+        ...(lastUsedAt ? { lastUsedAt } : {}),
+      };
+    });
   return { views };
 }
 
@@ -131,6 +180,8 @@ type ViewsState = PersistedViews & {
   deleteView: (id: string) => void;
   /** Moves a view up (`-1`) or down (`+1`) within its scope. */
   moveView: (id: string, delta: -1 | 1) => void;
+  /** Records that a view was just applied, stamping `lastUsedAt`. */
+  markViewUsed: (id: string) => void;
 };
 
 function newId(): string {
@@ -149,7 +200,13 @@ export const useViewsStore = create<ViewsState>()(
         const clean = normalizeViewName(name, views.filter((v) => v.scope === scope).map((v) => v.name));
         if (!clean) return null;
         const id = newId();
-        set({ views: [...views, { id, name: clean, scope, params: sanitizeViewParams(scope, params).params }] });
+        const createdAt = new Date().toISOString();
+        set({
+          views: [
+            ...views,
+            { id, name: clean, scope, params: sanitizeViewParams(scope, params).params, createdAt },
+          ],
+        });
         return id;
       },
       renameView: (id, name) => {
@@ -175,6 +232,12 @@ export const useViewsStore = create<ViewsState>()(
         views[swap] = target;
         views[index] = neighbour;
         set({ views });
+      },
+      markViewUsed: (id) => {
+        const views = get().views;
+        if (!views.some((v) => v.id === id)) return;
+        const lastUsedAt = new Date().toISOString();
+        set({ views: views.map((v) => (v.id === id ? { ...v, lastUsedAt } : v)) });
       },
     }),
     {
