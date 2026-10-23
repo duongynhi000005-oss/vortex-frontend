@@ -70,25 +70,6 @@ export function buildCanonicalMessage(
 }
 
 /**
- * Sign a governance comment with the supplied keypair using SEP-53 style
- * message signing. Returns the canonical payload plus signature metadata.
- */
-export async function signComment(
-  keypair: Keypair,
-  payload: SignedCommentPayload,
-): Promise<SignedComment> {
-  const textHash = await hashCommentText(payload.text);
-  const message = buildCanonicalMessage(payload.proposalId, textHash, payload.timestamp);
-  const signature = keypair.sign(Buffer.from(message, 'utf8')).toString('base64');
-  return {
-    ...payload,
-    author: keypair.publicKey(),
-    signature,
-    scheme: 'sep53',
-  };
-}
-
-/**
  * Build a zero-fee auth transaction carrying the canonical message in a
  * `manageData` operation. Used as a documented shim for wallets that do not
  * support SEP-53 message signing. The transaction is never submitted.

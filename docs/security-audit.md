@@ -457,3 +457,7 @@ An address-adjacent free-text field (such as a future memo field) currently bypa
 **Single SSRF guard:** `src/lib/server/safeFetch.ts` is the only sanctioned path for any server-side fetch to a non-fixed, user- or third-party-influenced host, and the only place a private-IP blocklist may live. `npm run check:single-ssrf-guard` (CI) fails if another one is introduced under `src/`.
 
 **Empty-module guard:** `npm run check:no-empty-modules` (CI) fails on any tracked `src/**/*.{ts,tsx}` that is zero bytes or has no `export`. Known-empty files are listed in `scripts/empty-modules-allowlist.json` (pending issues #61–#65 and sibling restorations); the list must shrink to zero.
+
+## CSP `style-src 'unsafe-inline'` follow-up (2026-10-22)
+
+`buildCsp` keeps `style-src 'self' 'unsafe-inline'` even when `script-src` is nonce-based. A nonce-based `style-src` is **not currently feasible**: Next.js inline critical CSS and runtime style injection do not carry the request nonce, so enforcing it would break styling and hydration. Blocking condition: inline critical CSS must be disabled (or Next.js must nonce its inline styles), which is out of scope here. Trigger to revisit: `CSP_REPORT_ONLY` data from `/api/csp-report` showing no inline-style violations, or a Next.js upgrade that nonces inline styles. The accepted risk is CSS-injection data exfiltration, which requires a separate HTML-injection bug to exploit.
