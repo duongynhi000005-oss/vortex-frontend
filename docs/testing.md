@@ -353,3 +353,48 @@ long solver names never clip.
 3. Record while scrolling the list top→bottom with the mouse wheel for ~10 s.
 4. Read the FPS track / frames summary; the budget is ≥ 55 fps average with no
    long tasks > 50 ms during scroll.
+
+## End-to-End Tests (Playwright)
+
+Specs live in `e2e/*.spec.ts`. `playwright.config.ts` runs each spec under three
+projects (`chromium`, `firefox`, `webkit`), serves the production build on
+`:3000` unless `BASE_URL` is set, and enables traces on the first retry.
+
+- `npm run test:e2e` runs the full suite; `npx playwright test --project=chromium`
+  runs one browser. Pull requests run Chromium only; `main` and nightly runs use
+  the full matrix (`.github/workflows/ci.yml`).
+- Selectors use roles, labels and visible text (`getByRole`, `getByPlaceholder`),
+  not CSS selectors.
+
+### Shared fixtures
+
+- **`e2e/fixtures/wallet.ts`** — `mockFreighter(page, overrides?)` replaces the
+  Freighter extension bridge (`window.postMessage`) with a stub. Options:
+  `publicKey`, `network` (`"TESTNET"` / `"PUBLIC"`), and `signing`
+  (`"approve"` / `"reject"` / `"timeout"`). Call `setFreighterState(page, patch)`
+  to switch account, network or signing outcome mid-test. State resets on every
+  navigation because the init script re-runs.
+- **`e2e/fixtures/api.ts`** — `mockBackend(page)` stubs the API on
+  `http://localhost:4000` for the swap flow. Add `page.route` calls after it to
+  override a single response.
+
+### Coverage matrix (journey × browser)
+
+✅ = spec exists and is scheduled in CI for that project. "Planned" = journey is
+in the scope of #515 but no spec exists yet. Nothing in this table has been run
+through the 10× flake check yet.
+
+| Journey | Spec | Chromium | Firefox | WebKit |
+| --- | --- | --- | --- | --- |
+| Command palette: open with shortcut, filter, navigate | `e2e/command-palette.spec.ts` | ✅ | ✅ | ✅ |
+| Swap happy path: connect, quote, submit | `e2e/swap-happy-path.spec.ts` | ✅ | ✅ | ✅ |
+| Contributors page renders with no CSP violations | `e2e/contributors-csp.spec.ts` | ✅ | ✅ | ✅ |
+| Preview smoke: `/`, `/markets`, `/portfolio` | `e2e/smoke/preview-smoke.spec.ts` | ✅ | ✅ | ✅ |
+| Solver registration wizard (happy + unhappy) | planned | — | — | — |
+| Accept intent, including conflict | planned | — | — | — |
+| Explore: filters, search, URL restoration, virtual list keyboard nav | planned | — | — | — |
+| My Intents: connect gating, export | planned | — | — | — |
+| Governance: browse and vote (mocked) | planned | — | — | — |
+| Offline banner and recovery | planned | — | — | — |
+| Network mismatch blocking | planned | — | — | — |
+| Locale switch persistence | planned | — | — | — |
