@@ -11,6 +11,8 @@ export type WaveIssue = {
   contributor: string | null;
   /** Curated onboarding signal from `Good first issue: yes` in issues.md. */
   goodFirstIssue: boolean;
+  /** Optional GitHub handle (no leading `@`) from `Mentor: handle` in issues.md. */
+  mentor: string | null;
 };
 
 /**
@@ -72,7 +74,7 @@ const STRKEY_RE = /^G[A-Z2-7]{55}$/;
 // The metadata block is the last parenthesised group with no nested parens,
 // so titles such as "Fix (urgent) parser" keep their own parentheses.
 const METADATA_RE = /^(.*?)\s*\(([^()]*)\)$/;
-const KNOWN_FIELDS = ["complexity", "points", "status", "contributor", "good first issue"];
+const KNOWN_FIELDS = ["complexity", "points", "status", "contributor", "good first issue", "mentor"];
 
 function isTier(value: string | undefined): value is ComplexityTier {
   return value === "Trivial" || value === "Medium" || value === "High";
@@ -140,6 +142,9 @@ function parseEntry(body: string, category: string): EntryResult {
     problems.push(`Good first issue must be yes or no, got "${goodFirst}"`);
   }
 
+  const rawMentor = fields.get("mentor")?.replace(/^@/, "");
+  const mentor = rawMentor && rawMentor !== "None" ? rawMentor : null;
+
   return {
     issue: {
       id,
@@ -150,6 +155,7 @@ function parseEntry(body: string, category: string): EntryResult {
       status,
       contributor,
       goodFirstIssue: goodFirst?.toLowerCase() === "yes",
+      mentor,
     },
     problems,
   };

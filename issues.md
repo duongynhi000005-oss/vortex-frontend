@@ -23,6 +23,9 @@ contributors dashboard). An issue is only labelled when it meets **all** of:
    WebSocket live-data layering.
 4. **Bounded** — the expected result is concrete and easy to verify.
 
+A labelled issue may optionally name a mentor with `Mentor: <github-handle>` in its
+entry; see "Good First Issue Mentors" in `CONTRIBUTING.md`.
+
 When in doubt, an issue stays unlabelled: complexity tier alone isn't the test
 (some Trivial issues touch the signing path, and nothing here is labelled just
 to fill a quota).

@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { StrKey } from '@stellar/stellar-sdk';
 import { governanceStore } from '@/lib/governanceStore';
 import { sanitizeText } from '@/lib/textSafety';
+import { AccountabilityBadge } from '@/components/AccountabilityBadge';
 
 const WINDOWS = [30, 90, 365] as const;
 const PAGE_SIZE = 20;
@@ -82,7 +83,13 @@ export default async function VoterHistoryPage({ params, searchParams }: VoterPa
       </nav>
 
       <header className="mb-6">
-        <h1 className="text-2xl font-semibold">Voter history</h1>
+        <h1 className="flex flex-wrap items-center gap-3 text-2xl font-semibold">
+          Voter history
+          <AccountabilityBadge
+            profile={{ participationRate, proposalsVoted: totalVotes }}
+            voteHistory={votes}
+          />
+        </h1>
         <p className="mt-1 break-all font-mono text-sm text-muted-foreground">{address}</p>
       </header>
 

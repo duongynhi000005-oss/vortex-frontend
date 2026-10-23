@@ -5,6 +5,7 @@ import { useDelegation, type DelegateProfile } from '@/hooks/useDelegation';
 import { useQueryState } from '@/hooks/useQueryState';
 import { sanitizeText } from '@/lib/textSafety';
 import { isValidStellarPublicKey } from '@/lib/stellarAddress';
+import { AccountabilityBadge } from '@/components/AccountabilityBadge';
 
 type SortKey = 'votingPower' | 'participationRate' | 'proposalsVoted';
 const SORT_KEYS: SortKey[] = ['votingPower', 'participationRate', 'proposalsVoted'];
@@ -204,7 +205,10 @@ function DelegatesPageContent() {
             <li key={d.address} className="rounded-lg border p-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
-                  <p className="font-medium">{sanitizeText(d.name)}</p>
+                  <p className="flex flex-wrap items-center gap-2 font-medium">
+                    {sanitizeText(d.name)}
+                    <AccountabilityBadge profile={d} />
+                  </p>
                   <p className="font-mono text-xs break-all text-muted-foreground">{d.address}</p>
                 </div>
                 <button

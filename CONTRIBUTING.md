@@ -69,6 +69,16 @@ A reviewer does not need to know the whole app to be useful. A first review shou
 4. Click through the changed screen with keyboard only, then in dark and light palettes.
 5. Leave a review with specific file and line comments. Approval from a `CODEOWNERS` maintainer is still required.
 
+## Good First Issue Mentors
+
+A maintainer can opt a good-first issue into having a mentor by adding `Mentor: <github-handle>` to its entry in `issues.md`, next to `Good first issue: yes`:
+
+```
+- #14 Swap Sound Effects (Complexity: Trivial, Points: 50, Status: Open, Contributor: None, Good first issue: yes, Mentor: octocat)
+```
+
+The Wave Tracker then shows an "Ask @handle about this one" link to that person's GitHub profile on the issue's card. Mentoring is optional and informal: the mentor agrees to answer questions about that specific issue (scope, where to look in the code, review expectations) on a best-effort basis. They are not expected to write the change, and the link is not an in-app chat or scheduling system. Only add a mentor who has agreed to it, and remove the field if they can no longer help. The handle is not validated against GitHub when `issues.md` is parsed.
+
 ## Reporting Conduct Issues
 
-If you experience or witness unacceptable behavior, please contact the maintainers at `conduct@vortexprotocol.io` or `[TODO: maintainer email]`.
+If you experience or witness unacceptable behavior, please contact the maintainers at `conduct@vortexprotocol.io`, the single conduct-reporting channel (also listed in the [Code of Conduct](./CODE_OF_CONDUCT.md)).
