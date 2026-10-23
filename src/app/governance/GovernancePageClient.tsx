@@ -9,15 +9,34 @@ import { useState } from "react";
 import Link from "next/link";
 import { Nav } from "@/components/Nav";
 import { useProposals } from "@/hooks/useGovernance";
+import type { VoteChoice } from "@/hooks/useVote";
 import type { ProposalFilters } from "@/lib/governanceApi";
 import { timeRemaining } from "@/lib/time";
 import { getMessage } from "@/i18n/messages";
+import { useWalletStore } from "@/store/wallet";
+import { useMyVotesStore } from "@/store/myVotes";
+
+const CHOICE_LABELS: Record<VoteChoice, string> = {
+  for: "For",
+  against: "Against",
+  abstain: "Abstain",
+};
+
+const NO_VOTES: never[] = [];
 
 export default function GovernancePageClient() {
   const [filter, setFilter] = useState<ProposalFilters["status"]>("all");
+  const [view, setView] = useState<"all" | "mine">("all");
 
   const { proposals, isLoading, error } = useProposals(
     filter === "all" ? undefined : { status: filter }
+  );
+  // Titles for the "My votes" list; shares the SWR cache with the "all" filter.
+  const { proposals: allProposals } = useProposals();
+
+  const { address } = useWalletStore();
+  const myVotes = useMyVotesStore(
+    (s) => (address ? s.byWallet[address] : undefined) ?? NO_VOTES
   );
 
   return (
@@ -37,24 +56,37 @@ export default function GovernancePageClient() {
 
         {/* Filter buttons */}
         <div className="flex gap-2 mb-6 overflow-x-auto pb-1">
-          {(["all", "active", "passed", "rejected"] as const).map((f) => (
-            <button
-              key={f}
-              type="button"
-              onClick={() => setFilter(f)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold capitalize transition-colors ${
-                filter === f
-                  ? "bg-vx-sage-bg text-vx-sage border border-vx-sage/30"
-                  : "bg-vx-surface/50 text-vx-muted hover:text-vx-text border border-vx-border"
-              }`}
-            >
-              {f}
-            </button>
-          ))}
+          {view === "all" &&
+            (["all", "active", "passed", "rejected"] as const).map((f) => (
+              <button
+                key={f}
+                type="button"
+                onClick={() => setFilter(f)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold capitalize transition-colors ${
+                  filter === f
+                    ? "bg-vx-sage-bg text-vx-sage border border-vx-sage/30"
+                    : "bg-vx-surface/50 text-vx-muted hover:text-vx-text border border-vx-border"
+                }`}
+              >
+                {f}
+              </button>
+            ))}
+          <button
+            type="button"
+            aria-pressed={view === "mine"}
+            onClick={() => setView(view === "mine" ? "all" : "mine")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+              view === "mine"
+                ? "bg-vx-sage-bg text-vx-sage border border-vx-sage/30"
+                : "bg-vx-surface/50 text-vx-muted hover:text-vx-text border border-vx-border"
+            }`}
+          >
+            My votes
+          </button>
         </div>
 
         {/* Loading skeleton */}
-        {isLoading && proposals.length === 0 && (
+        {view === "all" && isLoading && proposals.length === 0 && (
           <div className="space-y-4" aria-busy="true" aria-label="Loading proposals…">
             {[1, 2, 3].map((i) => (
               <div key={i} className="card p-5 sm:p-6 space-y-3 animate-pulse">
@@ -67,21 +99,66 @@ export default function GovernancePageClient() {
         )}
 
         {/* Error state */}
-        {error && !isLoading && (
+        {view === "all" && error && !isLoading && (
           <div role="alert" className="card p-6 text-sm text-vx-muted">
             Unable to load proposals: {error.message}
           </div>
         )}
 
         {/* Empty state */}
-        {!isLoading && !error && proposals.length === 0 && (
+        {view === "all" && !isLoading && !error && proposals.length === 0 && (
           <div className="card p-6 text-sm text-vx-muted text-center">
             No proposals match the selected filter.
           </div>
         )}
 
+        {/* My votes: votes cast through this app, per connected wallet */}
+        {view === "mine" && (
+          <div className="space-y-4">
+            <p className="text-xs text-vx-muted leading-relaxed">
+              Only votes cast through this app with the connected wallet are listed, stored on this
+              device. Votes cast elsewhere are not shown.
+            </p>
+            {!address && (
+              <div className="card p-6 text-sm text-vx-muted text-center">
+                Connect your wallet to see the votes you cast here.
+              </div>
+            )}
+            {address && myVotes.length === 0 && (
+              <div className="card p-6 text-sm text-vx-muted text-center">
+                No votes recorded for this wallet yet.
+              </div>
+            )}
+            {address &&
+              myVotes.map((vote) => {
+                const proposal = allProposals.find((p) => p.id === vote.proposalId);
+                return (
+                  <div
+                    key={vote.proposalId}
+                    className="card p-5 sm:p-6 hover:border-vx-sage/40 transition-colors"
+                  >
+                    <span className="font-mono text-xs text-vx-sage font-bold">{vote.proposalId}</span>
+                    <h2 className="text-base sm:text-lg font-bold text-vx-text mt-1 mb-2">
+                      <Link
+                        href={`/governance/${vote.proposalId}`}
+                        className="hover:text-vx-sage transition-colors"
+                      >
+                        {proposal?.title ?? vote.proposalId}
+                      </Link>
+                    </h2>
+                    <p className="text-xs text-vx-muted">
+                      Voted{" "}
+                      <strong className="text-vx-text">{CHOICE_LABELS[vote.choice]}</strong> on{" "}
+                      {new Date(vote.timestamp).toLocaleDateString()}
+                    </p>
+                  </div>
+                );
+              })}
+          </div>
+        )}
+
         {/* Proposal list */}
-        {proposals.length > 0 && (
+        {view === "all" && proposals.length > 0 && (
           <div className="space-y-4">
             {proposals.map((proposal) => (
               <div

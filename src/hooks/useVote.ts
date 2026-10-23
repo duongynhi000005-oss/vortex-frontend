@@ -20,6 +20,7 @@ import { useWalletStore } from "@/store/wallet";
 import { useToastStore } from "@/store/toast";
 import { useGovernanceApi } from "@/lib/governanceApiContext";
 import type { GovernanceProposal } from "@/lib/governanceApi";
+import { useMyVotesStore } from "@/store/myVotes";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -119,6 +120,7 @@ export function useVote(
   const { addToast } = useToastStore();
   const { mutate } = useSWRConfig();
   const api = useGovernanceApi();
+  const recordVote = useMyVotesStore((s) => s.recordVote);
 
   const [status, setStatus] = useState<VoteFlowStatus>("idle");
   const [selectedChoice, setSelectedChoice] = useState<VoteChoice | null>(null);
@@ -229,6 +231,11 @@ export function useVote(
 
       // Step 5: Confirmed
       setConfirmedChoice(selectedChoice);
+      recordVote(address, {
+        proposalId: proposal.id,
+        choice: selectedChoice,
+        timestamp: Date.now(),
+      });
       setOptimisticDelta((prev) =>
         prev ? { ...prev, pending: false } : prev
       );
@@ -260,6 +267,7 @@ export function useVote(
     api,
     mutate,
     addToast,
+    recordVote,
   ]);
 
   return {
