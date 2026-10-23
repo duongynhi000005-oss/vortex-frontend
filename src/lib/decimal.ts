@@ -213,4 +213,3 @@ function getGroupSeparator(locale: string): string {
     return ",";
   }
 }
-}
