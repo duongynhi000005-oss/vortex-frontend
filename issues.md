@@ -9,6 +9,14 @@ This document tracks all 125 contributor issues for the Vortex Protocol Drips Wa
 
 ---
 
+## Completion Dates & Velocity Tracking
+
+Completed issues may optionally record completion dates using `Completed: YYYY-MM-DD` in the entry's parenthesised metadata (e.g. `(Complexity: Medium, Points: 150, Status: Completed, Contributor: G..., Completed: 2026-03-15)`).
+
+When present, completion dates are used to calculate contributor velocity (points earned per week of participation) on the contributor leaderboard. Undated completions remain fully counted toward total points and completed count, and are ranked below dated contributors when sorting by velocity.
+
+---
+
 ## Good First Issues
 
 New to this codebase? These open issues are a good place to start. Each one is
@@ -44,12 +52,12 @@ state; #45 spans the proposal list and store.
 ---
 
 ## Core Swap UI
-- #1 Implement Swap Form Base Component (Complexity: High, Points: 200, Status: Completed, Contributor: GABC1122334455667788990011223344556677889900112233445566)
-- #2 Add Token Selection Dropdown with Price Feeds (Complexity: Medium, Points: 150, Status: Completed, Contributor: GDEF2233445566778899001122334455667788990011223344556677)
+- #1 Implement Swap Form Base Component (Complexity: High, Points: 200, Status: Completed, Contributor: GABC1122334455667788990011223344556677889900112233445566, Completed: 2026-01-10)
+- #2 Add Token Selection Dropdown with Price Feeds (Complexity: Medium, Points: 150, Status: Completed, Contributor: GDEF2233445566778899001122334455667788990011223344556677, Completed: 2026-02-01)
 - #3 Slippage Tolerance Settings Panel (Complexity: Trivial, Points: 50, Status: Completed, Contributor: GHIJ3344556677889900112233445566778899001122334455667788)
 - #4 Real-time Swap Rate Calculation & Price Impact (Complexity: High, Points: 200, Status: Completed, Contributor: GKLM4455667788990011223344556677889900112233445566778899)
 - #5 Swap Confirmation Modal with Route Preview (Complexity: Medium, Points: 150, Status: Completed, Contributor: GNOP5566778899001122334455667788990011223344556677889900)
-- #6 Add Gas Fee Estimation Display (Complexity: Trivial, Points: 50, Status: Completed, Contributor: GABC1122334455667788990011223344556677889900112233445566)
+- #6 Add Gas Fee Estimation Display (Complexity: Trivial, Points: 50, Status: Completed, Contributor: GABC1122334455667788990011223344556677889900112233445566, Completed: 2026-01-24)
 - #7 Mobile Responsive Swap Layout Optimizations (Complexity: Medium, Points: 150, Status: Completed, Contributor: GDEF2233445566778899001122334455667788990011223344556677)
 - #8 Cross-chain Source Chain Switcher (Complexity: High, Points: 200, Status: In Progress, Contributor: GHIJ3344556677889900112233445566778899001122334455667788)
 - #9 Swap History Local Storage Caching (Complexity: Trivial, Points: 50, Status: Completed, Contributor: GKLM4455667788990011223344556677889900112233445566778899)

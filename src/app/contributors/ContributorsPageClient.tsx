@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Nav } from "@/components/Nav";
-import type { ComplexityTier, IssueStatus, WaveMetrics } from "@/lib/issuesParser";
+import { type ComplexityTier, type IssueStatus, type WaveMetrics, sortLeaderboardByVelocity } from "@/lib/issuesParser";
 import { useTranslation } from "@/lib/i18n/I18nProvider";
 import type { MessageKey } from "@/lib/i18n";
 
@@ -54,6 +54,8 @@ export default function ContributorsPageClient({ metrics }: { metrics: WaveMetri
   const [searchQuery, setSearchQuery] = useState<string>(() => searchParams?.get("q") ?? "");
   const [goodFirstOnly, setGoodFirstOnly] = useState(() => searchParams?.get("goodFirstOnly") === "1");
   const [prLinks, setPrLinks] = useState<Record<number, string>>({});
+  const [sortByVelocity, setSortByVelocity] = useState(false);
+  const displayedLeaderboard = sortByVelocity ? sortLeaderboardByVelocity(metrics.leaderboard) : metrics.leaderboard;
 
   // Fail soft: if the lookup is unavailable, issues render without a PR link.
   useEffect(() => {
@@ -237,10 +239,30 @@ export default function ContributorsPageClient({ metrics }: { metrics: WaveMetri
 
         {/* Contributor Leaderboard */}
         <div className="card overflow-hidden mb-10">
-          <div className="px-5 py-4 border-b border-vx-border bg-vx-surface/30 flex items-center justify-between">
-            <h2 className="text-base font-semibold text-vx-text">{t("wave.leaderboard")}</h2>
-            <span className="text-xs text-vx-muted">{t("wave.leaderboard.count", { count: metrics.leaderboard.length })}</span>
+          <div className="px-5 py-4 border-b border-vx-border bg-vx-surface/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <h2 className="text-base font-semibold text-vx-text">{t("wave.leaderboard")}</h2>
+              <span className="text-xs text-vx-muted">{t("wave.leaderboard.count", { count: metrics.leaderboard.length })}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSortByVelocity((prev) => !prev)}
+              aria-pressed={sortByVelocity}
+              className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${
+                sortByVelocity
+                  ? "bg-vx-sage/15 border-vx-sage/40 text-vx-sage font-medium"
+                  : "bg-vx-surface border-vx-border text-vx-muted hover:text-vx-text hover:bg-vx-surface/60"
+              }`}
+            >
+              {sortByVelocity ? t("wave.leaderboard.sortByPoints") : t("wave.leaderboard.sortByVelocity")}
+            </button>
           </div>
+
+          {sortByVelocity && (
+            <div className="px-5 py-2.5 bg-vx-surface/40 border-b border-vx-border text-xs text-vx-muted">
+              {t("wave.leaderboard.velocityNote")}
+            </div>
+          )}
 
           <div className="divide-y divide-vx-line overflow-x-auto">
             <table className="w-full text-left text-xs">
@@ -249,11 +271,14 @@ export default function ContributorsPageClient({ metrics }: { metrics: WaveMetri
                   <th className="px-5 py-3 font-semibold">{t("wave.leaderboard.rank")}</th>
                   <th className="px-5 py-3 font-semibold">{t("wave.leaderboard.address")}</th>
                   <th className="px-5 py-3 font-semibold text-center">{t("wave.leaderboard.completed")}</th>
+                  {sortByVelocity && (
+                    <th className="px-5 py-3 font-semibold text-right">{t("wave.leaderboard.velocity")}</th>
+                  )}
                   <th className="px-5 py-3 font-semibold text-right">{t("wave.leaderboard.points")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-vx-line">
-                {metrics.leaderboard.map((c, idx) => (
+                {displayedLeaderboard.map((c, idx) => (
                   <tr key={c.contributor} className="hover:bg-vx-surface/30 transition-colors">
                     <td className="px-5 py-3.5 font-mono font-bold text-vx-dim">
                       #{String(idx + 1).padStart(2, "0")}
@@ -264,6 +289,17 @@ export default function ContributorsPageClient({ metrics }: { metrics: WaveMetri
                     <td className="px-5 py-3.5 text-center text-vx-muted font-medium">
                       {c.completedCount}
                     </td>
+                    {sortByVelocity && (
+                      <td className="px-5 py-3.5 text-right font-mono text-xs text-vx-text">
+                        {c.pointsPerWeek !== null ? (
+                          t("wave.leaderboard.velocityUnit", { count: c.pointsPerWeek })
+                        ) : (
+                          <span className="text-vx-muted" title={t("wave.leaderboard.undated")}>
+                            —
+                          </span>
+                        )}
+                      </td>
+                    )}
                     <td className="px-5 py-3.5 text-right font-mono font-bold text-vx-sage">
                       {t("wave.points.short", { count: c.pointsEarned.toLocaleString() })}
                     </td>

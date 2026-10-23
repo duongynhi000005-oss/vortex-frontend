@@ -13,6 +13,8 @@ export type WaveIssue = {
   goodFirstIssue: boolean;
   /** Optional GitHub handle (no leading `@`) from `Mentor: handle` in issues.md. */
   mentor: string | null;
+  /** Optional completion date (YYYY-MM-DD) from `Completed: YYYY-MM-DD` in issues.md. */
+  completedAt: string | null;
 };
 
 /**
@@ -46,6 +48,10 @@ export type ContributorTally = {
   contributor: string;
   completedCount: number;
   pointsEarned: number;
+  /** Points per week for contributors with at least one dated completed issue; null otherwise. */
+  pointsPerWeek: number | null;
+  /** Number of completed issues that have a completion date. */
+  datedCompletedCount: number;
 };
 
 export type WaveMetrics = {
@@ -74,7 +80,15 @@ const STRKEY_RE = /^G[A-Z2-7]{55}$/;
 // The metadata block is the last parenthesised group with no nested parens,
 // so titles such as "Fix (urgent) parser" keep their own parentheses.
 const METADATA_RE = /^(.*?)\s*\(([^()]*)\)$/;
-const KNOWN_FIELDS = ["complexity", "points", "status", "contributor", "good first issue", "mentor"];
+const KNOWN_FIELDS = [
+  "complexity",
+  "points",
+  "status",
+  "contributor",
+  "good first issue",
+  "mentor",
+  "completed",
+];
 
 function isTier(value: string | undefined): value is ComplexityTier {
   return value === "Trivial" || value === "Medium" || value === "High";
@@ -145,6 +159,16 @@ function parseEntry(body: string, category: string): EntryResult {
   const rawMentor = fields.get("mentor")?.replace(/^@/, "");
   const mentor = rawMentor && rawMentor !== "None" ? rawMentor : null;
 
+  const rawCompleted = fields.get("completed");
+  let completedAt: string | null = null;
+  if (rawCompleted && rawCompleted !== "None") {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(rawCompleted) && !isNaN(Date.parse(rawCompleted))) {
+      completedAt = rawCompleted;
+    } else {
+      problems.push(`malformed Completed date "${rawCompleted}", expected YYYY-MM-DD`);
+    }
+  }
+
   return {
     issue: {
       id,
@@ -156,9 +180,62 @@ function parseEntry(body: string, category: string): EntryResult {
       contributor,
       goodFirstIssue: goodFirst?.toLowerCase() === "yes",
       mentor,
+      completedAt,
     },
     problems,
   };
+}
+
+/**
+ * Computes points per week of participation for a list of completed issues.
+ * Returns null if no completed issues have a completion date.
+ * Uses a minimum participation time window of 1 week (Math.max(1, diffDays / 7))
+ * to prevent divide-by-zero on single-day or quick completions.
+ */
+export function computePointsPerWeek(
+  completedIssues: { points: number; completedAt: string | null }[]
+): number | null {
+  const dated = completedIssues.filter(
+    (i): i is { points: number; completedAt: string } => Boolean(i.completedAt)
+  );
+  if (dated.length === 0) return null;
+
+  const totalPoints = completedIssues.reduce((sum, i) => sum + i.points, 0);
+  const timestamps = dated.map((i) => new Date(i.completedAt).getTime());
+  const minTime = Math.min(...timestamps);
+  const maxTime = Math.max(...timestamps);
+  const diffDays = Math.max(0, (maxTime - minTime) / (1000 * 60 * 60 * 24));
+  const weeks = Math.max(1, diffDays / 7);
+
+  return Math.round((totalPoints / weeks) * 10) / 10;
+}
+
+/**
+ * Sorts the contributor leaderboard by velocity (points per week descending).
+ * Contributors with at least one dated completion come first, sorted by pointsPerWeek desc.
+ * Contributors without dated completions follow, sorted by total pointsEarned desc.
+ * Ties are broken by pointsEarned desc, then by contributor address asc.
+ */
+export function sortLeaderboardByVelocity(
+  leaderboard: ContributorTally[]
+): ContributorTally[] {
+  return [...leaderboard].sort((a, b) => {
+    const aHas = a.pointsPerWeek !== null;
+    const bHas = b.pointsPerWeek !== null;
+    if (aHas && !bHas) return -1;
+    if (!aHas && bHas) return 1;
+    if (aHas && bHas) {
+      const vDiff = b.pointsPerWeek! - a.pointsPerWeek!;
+      if (vDiff !== 0) return vDiff;
+      const pDiff = b.pointsEarned - a.pointsEarned;
+      if (pDiff !== 0) return pDiff;
+      return a.contributor.localeCompare(b.contributor);
+    }
+    // Neither has pointsPerWeek: fallback to pointsEarned desc
+    const pDiff = b.pointsEarned - a.pointsEarned;
+    if (pDiff !== 0) return pDiff;
+    return a.contributor.localeCompare(b.contributor);
+  });
 }
 
 export function parseIssuesMarkdown(markdown: string): WaveMetrics {
@@ -209,7 +286,14 @@ export function parseIssuesMarkdown(markdown: string): WaveMetrics {
     Medium: { complexity: "Medium", total: 0, completed: 0, points: 0 },
     High: { complexity: "High", total: 0, completed: 0, points: 0 },
   };
-  const contributorMap: Record<string, ContributorTally> = {};
+
+  type ContributorAcc = {
+    contributor: string;
+    completedCount: number;
+    pointsEarned: number;
+    completedIssues: { points: number; completedAt: string | null }[];
+  };
+  const contributorMap: Record<string, ContributorAcc> = {};
 
   for (const issue of issues) {
     totalPoints += issue.points;
@@ -257,15 +341,23 @@ export function parseIssuesMarkdown(markdown: string): WaveMetrics {
         contributor: issue.contributor,
         completedCount: 0,
         pointsEarned: 0,
+        completedIssues: [],
       });
       tally.completedCount++;
       tally.pointsEarned += issue.points;
+      tally.completedIssues.push({ points: issue.points, completedAt: issue.completedAt });
     }
   }
 
-  const leaderboard = Object.values(contributorMap).sort(
-    (a, b) => b.pointsEarned - a.pointsEarned
-  );
+  const leaderboard: ContributorTally[] = Object.values(contributorMap)
+    .map((acc) => ({
+      contributor: acc.contributor,
+      completedCount: acc.completedCount,
+      pointsEarned: acc.pointsEarned,
+      pointsPerWeek: computePointsPerWeek(acc.completedIssues),
+      datedCompletedCount: acc.completedIssues.filter((i) => i.completedAt !== null).length,
+    }))
+    .sort((a, b) => b.pointsEarned - a.pointsEarned);
 
   return {
     totalIssues: issues.length,

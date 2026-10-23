@@ -88,3 +88,45 @@ describe("ContributorsPageClient mentor affordance", () => {
     expect(screen.getAllByRole("link", { name: /Ask @/ })).toHaveLength(1);
   });
 });
+
+describe("ContributorsPageClient leaderboard velocity sort toggle", () => {
+  const leaderboardMetrics = parseIssuesMarkdown(`
+## Core Swap UI
+- #1 Fast Contributor (Complexity: Medium, Points: 150, Status: Completed, Contributor: GABC1122334455667788990011223344556677889900112233445566, Completed: 2026-03-01)
+- #2 High Points Undated (Complexity: High, Points: 200, Status: Completed, Contributor: GDEF2233445566778899001122334455667788990011223344556677)
+`);
+
+  it("toggles velocity sort mode and displays velocity column and note", async () => {
+    const user = userEvent.setup();
+    render(<ContributorsPageClient metrics={leaderboardMetrics} />);
+
+    // By default, sorted by points: GDEF (200 pts) first, then GABC (150 pts)
+    const rowsBefore = screen.getAllByRole("row");
+    expect(rowsBefore[1]!).toHaveTextContent("GDEF...6677");
+    expect(rowsBefore[2]!).toHaveTextContent("GABC...5566");
+    expect(screen.queryByRole("columnheader", { name: "Velocity" })).not.toBeInTheDocument();
+
+    const sortButton = screen.getByRole("button", { name: "Sort by velocity" });
+    expect(sortButton).toHaveAttribute("aria-pressed", "false");
+
+    await user.click(sortButton);
+
+    // Now sorted by velocity: GABC (150 pts/wk) first, then GDEF (undated)
+    expect(screen.getByRole("button", { name: "Sort by total points" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("columnheader", { name: "Velocity" })).toBeInTheDocument();
+    expect(
+      screen.getByText(/Contributors with at least one dated completion are ranked by points per week/)
+    ).toBeInTheDocument();
+
+    const rowsAfter = screen.getAllByRole("row");
+    expect(rowsAfter[1]!).toHaveTextContent("GABC...5566");
+    expect(rowsAfter[1]!).toHaveTextContent("150 pts/wk");
+    expect(rowsAfter[2]!).toHaveTextContent("GDEF...6677");
+    expect(rowsAfter[2]!).toHaveTextContent("—");
+
+    // Click again to toggle back
+    await user.click(screen.getByRole("button", { name: "Sort by total points" }));
+    expect(screen.getByRole("button", { name: "Sort by velocity" })).toHaveAttribute("aria-pressed", "false");
+    expect(screen.queryByRole("columnheader", { name: "Velocity" })).not.toBeInTheDocument();
+  });
+});
