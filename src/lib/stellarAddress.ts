@@ -73,8 +73,10 @@ export function isValidStellarPublicKey(address: string): boolean {
   );
 }
 
-/** Alias used by the governance pages; the account-key check is the validation they need. */
-export const isValidStellarAddress = isValidStellarPublicKey;
+/** Canonical account-address validator retained under the app-level name. */
+export function isValidStellarAddress(address: string): boolean {
+  return isValidStellarPublicKey(normalizeStellarAddress(address));
+}
 
 /**
  * Normalises a Stellar address for comparison: trims surrounding whitespace and
