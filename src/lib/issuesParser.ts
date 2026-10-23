@@ -48,6 +48,27 @@ export type ContributorTally = {
   pointsEarned: number;
 };
 
+export type ContributorCategoryBreakdown = {
+  category: string;
+  count: number;
+  points: number;
+};
+
+export type ContributorComplexityBreakdown = {
+  complexity: ComplexityTier;
+  count: number;
+  points: number;
+};
+
+export type ContributorBreakdown = {
+  contributor: string;
+  categories: ContributorCategoryBreakdown[];
+  complexities: ContributorComplexityBreakdown[];
+  totalCompleted: number;
+  totalPoints: number;
+  completedIssues: WaveIssue[];
+};
+
 export type WaveMetrics = {
   totalIssues: number;
   completedIssues: number;
@@ -158,6 +179,72 @@ function parseEntry(body: string, category: string): EntryResult {
       mentor,
     },
     problems,
+  };
+}
+
+/**
+ * Computes category and complexity tier breakdown for a given contributor's completed issues.
+ * Returns empty breakdowns with 0 totalCompleted and 0 totalPoints if contributor has no completed issues.
+ * Guarantees exact sum parity:
+ *   sum(categories.count) === totalCompleted === sum(complexities.count)
+ *   sum(categories.points) === totalPoints === sum(complexities.points)
+ */
+export function computeContributorBreakdown(
+  issues: WaveIssue[],
+  contributor: string
+): ContributorBreakdown {
+  const completedIssues = issues.filter(
+    (issue) => issue.status === "Completed" && issue.contributor === contributor
+  );
+
+  const categoryMap: Record<string, { count: number; points: number }> = {};
+  const complexityMap: Record<ComplexityTier, { count: number; points: number }> = {
+    Trivial: { count: 0, points: 0 },
+    Medium: { count: 0, points: 0 },
+    High: { count: 0, points: 0 },
+  };
+
+  let totalPoints = 0;
+
+  for (const issue of completedIssues) {
+    totalPoints += issue.points;
+
+    const cat = issue.category || "General";
+    const existing = categoryMap[cat];
+    if (existing) {
+      existing.count += 1;
+      existing.points += issue.points;
+    } else {
+      categoryMap[cat] = { count: 1, points: issue.points };
+    }
+
+    complexityMap[issue.complexity].count += 1;
+    complexityMap[issue.complexity].points += issue.points;
+  }
+
+  const categories: ContributorCategoryBreakdown[] = Object.entries(categoryMap)
+    .map(([category, stats]) => ({
+      category,
+      count: stats.count,
+      points: stats.points,
+    }))
+    .sort((a, b) => b.points - a.points || a.category.localeCompare(b.category));
+
+  const complexities: ContributorComplexityBreakdown[] = (
+    ["Trivial", "Medium", "High"] as ComplexityTier[]
+  ).map((tier) => ({
+    complexity: tier,
+    count: complexityMap[tier].count,
+    points: complexityMap[tier].points,
+  }));
+
+  return {
+    contributor,
+    categories,
+    complexities,
+    totalCompleted: completedIssues.length,
+    totalPoints,
+    completedIssues,
   };
 }
 

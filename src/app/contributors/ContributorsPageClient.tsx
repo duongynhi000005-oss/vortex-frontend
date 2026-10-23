@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Nav } from "@/components/Nav";
-import type { ComplexityTier, IssueStatus, WaveMetrics } from "@/lib/issuesParser";
+import { type ComplexityTier, type IssueStatus, type WaveMetrics, computeContributorBreakdown } from "@/lib/issuesParser";
 import { useTranslation } from "@/lib/i18n/I18nProvider";
 import type { MessageKey } from "@/lib/i18n";
 
@@ -54,6 +54,7 @@ export default function ContributorsPageClient({ metrics }: { metrics: WaveMetri
   const [searchQuery, setSearchQuery] = useState<string>(() => searchParams?.get("q") ?? "");
   const [goodFirstOnly, setGoodFirstOnly] = useState(() => searchParams?.get("goodFirstOnly") === "1");
   const [prLinks, setPrLinks] = useState<Record<number, string>>({});
+  const [selectedContributor, setSelectedContributor] = useState<string | null>(null);
 
   // Fail soft: if the lookup is unavailable, issues render without a PR link.
   useEffect(() => {
@@ -253,22 +254,157 @@ export default function ContributorsPageClient({ metrics }: { metrics: WaveMetri
                 </tr>
               </thead>
               <tbody className="divide-y divide-vx-line">
-                {metrics.leaderboard.map((c, idx) => (
-                  <tr key={c.contributor} className="hover:bg-vx-surface/30 transition-colors">
-                    <td className="px-5 py-3.5 font-mono font-bold text-vx-dim">
-                      #{String(idx + 1).padStart(2, "0")}
-                    </td>
-                    <td className="px-5 py-3.5 font-mono font-semibold text-vx-text">
-                      {truncateAddress(c.contributor)}
-                    </td>
-                    <td className="px-5 py-3.5 text-center text-vx-muted font-medium">
-                      {c.completedCount}
-                    </td>
-                    <td className="px-5 py-3.5 text-right font-mono font-bold text-vx-sage">
-                      {t("wave.points.short", { count: c.pointsEarned.toLocaleString() })}
-                    </td>
-                  </tr>
-                ))}
+                {metrics.leaderboard.map((c, idx) => {
+                  const isSelected = selectedContributor === c.contributor;
+                  const breakdown = isSelected ? computeContributorBreakdown(metrics.issues, c.contributor) : null;
+                  return (
+                    <Fragment key={c.contributor}>
+                      <tr
+                        onClick={() => setSelectedContributor(isSelected ? null : c.contributor)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            setSelectedContributor(isSelected ? null : c.contributor);
+                          }
+                        }}
+                        tabIndex={0}
+                        role="button"
+                        aria-expanded={isSelected}
+                        aria-label={t("wave.breakdown.viewBreakdown", { address: truncateAddress(c.contributor) })}
+                        className={`cursor-pointer transition-colors ${
+                          isSelected ? "bg-vx-surface/50 font-medium" : "hover:bg-vx-surface/30"
+                        }`}
+                      >
+                        <td className="px-5 py-3.5 font-mono font-bold text-vx-dim">
+                          #{String(idx + 1).padStart(2, "0")}
+                        </td>
+                        <td className="px-5 py-3.5 font-mono font-semibold text-vx-text">
+                          <div className="flex items-center gap-2">
+                            <span>{truncateAddress(c.contributor)}</span>
+                            <span className="text-[10px] text-vx-muted">
+                              {isSelected ? "▲" : "▼"}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-5 py-3.5 text-center text-vx-muted font-medium">
+                          {c.completedCount}
+                        </td>
+                        <td className="px-5 py-3.5 text-right font-mono font-bold text-vx-sage">
+                          {t("wave.points.short", { count: c.pointsEarned.toLocaleString() })}
+                        </td>
+                      </tr>
+                      {isSelected && breakdown && (
+                        <tr className="bg-vx-surface/20 border-b border-vx-border/60">
+                          <td colSpan={4} className="p-5">
+                            <div className="space-y-4 text-xs">
+                              <div className="flex items-center justify-between border-b border-vx-border/40 pb-2">
+                                <span className="font-semibold text-vx-text">
+                                  {t("wave.breakdown.title")}
+                                </span>
+                                <span className="font-mono text-vx-muted text-[11px]">
+                                  {c.contributor}
+                                </span>
+                              </div>
+
+                              {/* Complexity Tiers Breakdown */}
+                              <div>
+                                <div className="text-[11px] font-semibold text-vx-muted uppercase tracking-wider mb-2">
+                                  {t("wave.breakdown.complexities")}
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                  {breakdown.complexities.map((tier) => (
+                                    <div
+                                      key={tier.complexity}
+                                      className="p-2.5 rounded-lg border border-vx-border/60 bg-vx-surface/40 flex items-center justify-between"
+                                    >
+                                      <span
+                                        className={`text-xs font-bold ${
+                                          tier.complexity === "High"
+                                            ? "text-vx-amber"
+                                            : tier.complexity === "Medium"
+                                            ? "text-vx-sage"
+                                            : "text-blue-400"
+                                        }`}
+                                      >
+                                        {t(TIER_LABEL_KEY[tier.complexity])}
+                                      </span>
+                                      <div className="text-right">
+                                        <span className="font-semibold text-vx-text">
+                                          {tier.count}
+                                        </span>
+                                        <span className="text-vx-muted text-[10px] ml-1.5">
+                                          ({t("wave.points.short", { count: tier.points.toLocaleString() })})
+                                        </span>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+
+                              {/* Category Breakdown */}
+                              <div>
+                                <div className="text-[11px] font-semibold text-vx-muted uppercase tracking-wider mb-2">
+                                  {t("wave.breakdown.categories")}
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                  {breakdown.categories.map((cat) => (
+                                    <div
+                                      key={cat.category}
+                                      className="px-3 py-1.5 rounded-lg border border-vx-border/60 bg-vx-surface/40 text-xs flex items-center gap-2"
+                                    >
+                                      <span className="font-medium text-vx-text">{cat.category}</span>
+                                      <span className="text-vx-muted font-mono">
+                                        {cat.count} · {t("wave.points.short", { count: cat.points.toLocaleString() })}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+
+                              {/* Completed Issues List */}
+                              {breakdown.completedIssues.length > 0 && (
+                                <div>
+                                  <div className="text-[11px] font-semibold text-vx-muted uppercase tracking-wider mb-2">
+                                    {t("wave.breakdown.completedIssues")} ({breakdown.completedIssues.length})
+                                  </div>
+                                  <div className="divide-y divide-vx-border/40 border border-vx-border/60 rounded-lg overflow-hidden bg-vx-surface/30">
+                                    {breakdown.completedIssues.map((issue) => (
+                                      <div key={issue.id} className="p-2.5 flex items-center justify-between gap-3">
+                                        <div className="flex items-center gap-2 truncate">
+                                          <span className="font-mono text-vx-dim font-bold">#{issue.id}</span>
+                                          <span className="text-vx-text truncate font-medium">{issue.title}</span>
+                                          <span className="text-[10px] text-vx-muted px-1.5 py-0.5 rounded bg-vx-surface border border-vx-border">
+                                            {issue.category}
+                                          </span>
+                                        </div>
+                                        <div className="flex items-center gap-2 shrink-0">
+                                          <span
+                                            className={`text-[11px] font-semibold ${
+                                              issue.complexity === "High"
+                                                ? "text-vx-amber"
+                                                : issue.complexity === "Medium"
+                                                ? "text-vx-sage"
+                                                : "text-blue-400"
+                                            }`}
+                                          >
+                                            {t(TIER_NAME_KEY[issue.complexity])}
+                                          </span>
+                                          <span className="font-mono font-bold text-vx-sage text-xs">
+                                            {t("wave.points.short", { count: issue.points.toLocaleString() })}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>

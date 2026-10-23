@@ -88,3 +88,38 @@ describe("ContributorsPageClient mentor affordance", () => {
     expect(screen.getAllByRole("link", { name: /Ask @/ })).toHaveLength(1);
   });
 });
+
+describe("ContributorsPageClient contributor detail breakdown", () => {
+  const breakdownMetrics = parseIssuesMarkdown(`
+## Core Swap UI
+- #1 Base Component (Complexity: High, Points: 200, Status: Completed, Contributor: GABC1122334455667788990011223344556677889900112233445566)
+- #2 Token Selector (Complexity: Medium, Points: 150, Status: Completed, Contributor: GABC1122334455667788990011223344556677889900112233445566)
+- #3 Slippage Panel (Complexity: Trivial, Points: 50, Status: Completed, Contributor: GDEF2233445566778899001122334455667788990011223344556677)
+`);
+
+  it("expands contributor breakdown on row click and collapses on second click", async () => {
+    const user = userEvent.setup();
+    render(<ContributorsPageClient metrics={breakdownMetrics} />);
+
+    expect(screen.queryByText("Contributor breakdown")).not.toBeInTheDocument();
+
+    const gabcRow = screen.getByRole("button", { name: /GABC\.\.\.5566/ });
+    expect(gabcRow).toHaveAttribute("aria-expanded", "false");
+
+    await user.click(gabcRow);
+
+    expect(gabcRow).toHaveAttribute("aria-expanded", "true");
+    const breakdownEl = screen.getByText("Contributor breakdown").closest("tr")!;
+    expect(within(breakdownEl).getByText("Contributor breakdown")).toBeInTheDocument();
+    expect(within(breakdownEl).getByText("Complexity tiers")).toBeInTheDocument();
+    expect(within(breakdownEl).getByText("Categories")).toBeInTheDocument();
+    expect(within(breakdownEl).getByText("Completed issues (2)")).toBeInTheDocument();
+    expect(within(breakdownEl).getByText("Base Component")).toBeInTheDocument();
+    expect(within(breakdownEl).getByText("Token Selector")).toBeInTheDocument();
+
+    // Second click collapses
+    await user.click(gabcRow);
+    expect(gabcRow).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByText("Contributor breakdown")).not.toBeInTheDocument();
+  });
+});
