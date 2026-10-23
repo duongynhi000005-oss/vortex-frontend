@@ -11,6 +11,7 @@ import { useIntent } from "@/hooks/useIntent";
 import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
 import { useLocale, useTranslation } from "@/lib/i18n/I18nProvider";
 import { buildReceipt, receiptToText } from "@/lib/receipt";
+import { swapAgainHref } from "@/lib/swapLink";
 
 const NETWORK = process.env["NEXT_PUBLIC_NETWORK"] ?? "testnet";
 
@@ -37,8 +38,11 @@ export default function ReceiptClient({ id }: { id: string }) {
           <Link href={`/explore/${id}`} className="text-xs text-vx-sage hover:underline">
             ← {t("receipt.back")}
           </Link>
-          {receipt && (
+          {receipt && intent && (
             <div className="flex gap-2">
+              <Link href={swapAgainHref(intent)} className={buttonClass}>
+                {t("receipt.swapAgain")}
+              </Link>
               <button type="button" className={buttonClass} onClick={() => void copy(receiptToText(receipt))}>
                 {copied ? t("receipt.copied") : t("receipt.copy")}
               </button>
