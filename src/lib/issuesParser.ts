@@ -13,6 +13,16 @@ export type WaveIssue = {
   goodFirstIssue: boolean;
 };
 
+/**
+ * A problem found while parsing. Malformed entries are dropped from `issues`
+ * and reported here instead of being silently defaulted; maintainers read these.
+ * `line` is `null` for file-level problems.
+ */
+export type ParseWarning = {
+  line: number | null;
+  message: string;
+};
+
 export type CategorySummary = {
   category: string;
   total: number;
@@ -47,100 +57,137 @@ export type WaveMetrics = {
   complexities: ComplexitySummary[];
   leaderboard: ContributorTally[];
   issues: WaveIssue[];
+  warnings: ParseWarning[];
 };
 
-const POINTS_MAP: Record<ComplexityTier, number> = {
+/** The single source of truth for points per complexity tier. */
+export const TIER_POINTS: Record<ComplexityTier, number> = {
   Trivial: 50,
   Medium: 150,
   High: 200,
 };
 
+// Stellar account strkey: "G" + 55 base32 characters (A-Z, 2-7).
+const STRKEY_RE = /^G[A-Z2-7]{55}$/;
+// The metadata block is the last parenthesised group with no nested parens,
+// so titles such as "Fix (urgent) parser" keep their own parentheses.
+const METADATA_RE = /^(.*?)\s*\(([^()]*)\)$/;
+const KNOWN_FIELDS = ["complexity", "points", "status", "contributor", "good first issue"];
+
+function isTier(value: string | undefined): value is ComplexityTier {
+  return value === "Trivial" || value === "Medium" || value === "High";
+}
+
+function isStatus(value: string | undefined): value is IssueStatus {
+  return value === "Open" || value === "In Progress" || value === "Completed";
+}
+
+type EntryResult = { issue: WaveIssue | null; problems: string[] };
+
+/** Parses one bullet body such as `#123 Title (Complexity: High, Status: Open)`. */
+function parseEntry(body: string, category: string): EntryResult {
+  const idMatch = body.match(/^#(\d+)\s+(.*)$/);
+  if (!idMatch) return { issue: null, problems: ["expected `- #<number> <title> (...)`"] };
+
+  const id = Number(idMatch[1]);
+  const meta = idMatch[2].match(METADATA_RE);
+  if (!meta) return { issue: null, problems: ["missing trailing (Complexity: …, Status: …) block"] };
+
+  const title = meta[1].trim();
+  if (!title) return { issue: null, problems: ["empty title"] };
+
+  const problems: string[] = [];
+  const fields = new Map<string, string>();
+  for (const part of meta[2].split(",")) {
+    const colon = part.indexOf(":");
+    const key = (colon === -1 ? part : part.slice(0, colon)).trim().toLowerCase();
+    const value = colon === -1 ? "" : part.slice(colon + 1).trim();
+    if (!key || !value) {
+      problems.push(`malformed field "${part.trim()}"`);
+      continue;
+    }
+    if (!KNOWN_FIELDS.includes(key)) problems.push(`unknown field "${key}"`);
+    fields.set(key, value);
+  }
+
+  const complexity = fields.get("complexity");
+  if (!isTier(complexity)) {
+    return { issue: null, problems: [...problems, `unknown complexity "${complexity ?? ""}"`] };
+  }
+  const status = fields.get("status");
+  if (!isStatus(status)) {
+    return { issue: null, problems: [...problems, `unknown status "${status ?? ""}"`] };
+  }
+
+  // Points are derived from the tier table; a declared value is only checked.
+  const points = TIER_POINTS[complexity];
+  const declaredPoints = fields.get("points");
+  if (declaredPoints !== undefined && Number(declaredPoints) !== points) {
+    problems.push(`Points ${declaredPoints} does not match ${complexity} tier (${points}); using ${points}`);
+  }
+
+  let contributor: string | null = null;
+  const declaredContributor = fields.get("contributor");
+  if (declaredContributor && declaredContributor !== "None") {
+    contributor = declaredContributor;
+    if (!STRKEY_RE.test(declaredContributor)) {
+      problems.push(`contributor is not a valid Stellar address: ${declaredContributor.slice(0, 12)}…`);
+    }
+  }
+
+  const goodFirst = fields.get("good first issue");
+  if (goodFirst !== undefined && goodFirst !== "yes" && goodFirst !== "no") {
+    problems.push(`Good first issue must be yes or no, got "${goodFirst}"`);
+  }
+
+  return {
+    issue: {
+      id,
+      title,
+      category,
+      complexity,
+      points,
+      status,
+      contributor,
+      goodFirstIssue: goodFirst?.toLowerCase() === "yes",
+    },
+    problems,
+  };
+}
+
 export function parseIssuesMarkdown(markdown: string): WaveMetrics {
-  const lines = markdown.split("\n");
+  const lines = markdown.split(/\r?\n/);
   let currentCategory = "General";
   const issues: WaveIssue[] = [];
+  const warnings: ParseWarning[] = [];
+  const seenIds = new Set<number>();
 
-  for (const line of lines) {
-    const trimmed = line.trim();
+  lines.forEach((raw, index) => {
+    const line = index + 1;
+    const trimmed = raw.trim();
 
     // Track category headings (e.g. ## Core Swap UI)
     if (trimmed.startsWith("## ") && !trimmed.toLowerCase().includes("complexity")) {
-      currentCategory = trimmed.replace("## ", "").trim();
-      continue;
+      currentCategory = trimmed.slice(3).trim();
+      return;
     }
 
-    // Match issue list items starting with - #<number>
-    if (trimmed.startsWith("- #")) {
-      try {
-        const afterHash = trimmed.substring(3);
-        const firstSpaceIdx = afterHash.indexOf(" ");
-        if (firstSpaceIdx === -1) continue;
+    if (!trimmed.startsWith("- #")) return;
 
-        const idNum = parseInt(afterHash.substring(0, firstSpaceIdx), 10);
-        if (isNaN(idNum)) continue;
+    const { issue, problems } = parseEntry(trimmed.slice(2).trim(), currentCategory);
+    for (const message of problems) warnings.push({ line, message });
+    if (!issue) return;
 
-        const rest = afterHash.substring(firstSpaceIdx + 1);
-
-        // Title and parenthesized details: "Title (Complexity: ..., Points: ..., Status: ..., Contributor: ...)"
-        const parenStart = rest.indexOf("(");
-        const parenEnd = rest.lastIndexOf(")");
-
-        let title = rest;
-        let detailsStr = "";
-
-        if (parenStart !== -1 && parenEnd !== -1 && parenEnd > parenStart) {
-          title = rest.substring(0, parenStart).trim();
-          detailsStr = rest.substring(parenStart + 1, parenEnd).trim();
-        }
-
-        // Parse key-value pairs inside parentheses
-        const detailsParts = detailsStr.split(",");
-        let complexity: ComplexityTier = "Medium";
-        let points = 150;
-        let status: IssueStatus = "Open";
-        let contributor: string | null = null;
-        let goodFirstIssue = false;
-
-        for (const part of detailsParts) {
-          const [key, val] = part.split(":").map((s) => s?.trim());
-          if (!key || !val) continue;
-
-          const keyLower = key.toLowerCase();
-          if (keyLower === "complexity") {
-            if (val === "Trivial" || val === "Medium" || val === "High") {
-              complexity = val;
-              points = POINTS_MAP[val];
-            }
-          } else if (keyLower === "points") {
-            const parsedPts = parseInt(val, 10);
-            if (!isNaN(parsedPts)) points = parsedPts;
-          } else if (keyLower === "status") {
-            if (val === "Completed" || val === "In Progress" || val === "Open") {
-              status = val;
-            }
-          } else if (keyLower === "contributor") {
-            if (val && val !== "None") {
-              contributor = val;
-            }
-          } else if (keyLower === "good first issue") {
-            goodFirstIssue = val.toLowerCase() === "yes";
-          }
-        }
-
-        issues.push({
-          id: idNum,
-          title,
-          category: currentCategory,
-          complexity,
-          points,
-          status,
-          contributor,
-          goodFirstIssue,
-        });
-      } catch {
-        // Graceful error handling for unexpected lines
-      }
+    if (seenIds.has(issue.id)) {
+      warnings.push({ line, message: `duplicate issue #${issue.id}; keeping the first entry` });
+      return;
     }
+    seenIds.add(issue.id);
+    issues.push(issue);
+  });
+
+  if (issues.length === 0) {
+    warnings.push({ line: null, message: "no issue entries found" });
   }
 
   // Calculate metrics
@@ -225,5 +272,6 @@ export function parseIssuesMarkdown(markdown: string): WaveMetrics {
     complexities: Object.values(complexityMap),
     leaderboard,
     issues,
+    warnings,
   };
 }
