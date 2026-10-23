@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useI18n } from "@/lib/i18n/I18nProvider";
+import { useTranslation } from "@/lib/i18n/I18nProvider";
 import { useWallet } from "@/lib/wallet/WalletProvider";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import {
@@ -18,6 +18,8 @@ import {
   type SubmitError,
 } from "@/lib/supportRequestStore";
 
+export type SortOption = "upvotes" | "newest" | "name";
+
 type SubmitState =
   | { status: "idle" }
   | { status: "submitting" }
@@ -25,10 +27,11 @@ type SubmitState =
   | { status: "success" };
 
 export default function RequestsPageClient() {
-  const { t } = useI18n();
+  const { t } = useTranslation();
   const { address } = useWallet();
 
   const [requests, setRequests] = useState<SupportRequest[]>([]);
+  const [sortBy, setSortBy] = useState<SortOption>("upvotes");
   const [kind, setKind] = useState<SupportRequestKind>("chain");
   const [name, setName] = useState("");
   const [justification, setJustification] = useState("");
@@ -54,6 +57,34 @@ export default function RequestsPageClient() {
     () => (debouncedName.trim() ? isAlreadySupported(kind, debouncedName) : false),
     [kind, debouncedName],
   );
+
+  const sortedRequests = useMemo(() => {
+    const list = [...requests];
+    switch (sortBy) {
+      case "upvotes":
+        return list.sort((a, b) => {
+          const voteDiff = b.upvoters.length - a.upvoters.length;
+          if (voteDiff !== 0) return voteDiff;
+          return a.createdAt.localeCompare(b.createdAt);
+        });
+      case "newest":
+        return list.sort((a, b) => {
+          const dateDiff = b.createdAt.localeCompare(a.createdAt);
+          if (dateDiff !== 0) return dateDiff;
+          const nameDiff = a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+          if (nameDiff !== 0) return nameDiff;
+          return a.id.localeCompare(b.id);
+        });
+      case "name":
+        return list.sort((a, b) => {
+          const nameDiff = a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+          if (nameDiff !== 0) return nameDiff;
+          const voteDiff = b.upvoters.length - a.upvoters.length;
+          if (voteDiff !== 0) return voteDiff;
+          return a.createdAt.localeCompare(b.createdAt);
+        });
+    }
+  }, [requests, sortBy]);
 
   const handleSubmit = useCallback(
     (event: React.FormEvent<HTMLFormElement>) => {
@@ -203,8 +234,28 @@ export default function RequestsPageClient() {
         </p>
       )}
 
+      <div className="flex items-center justify-between gap-4">
+        <label
+          htmlFor="requests-sort"
+          className="text-sm font-medium text-slate-700 dark:text-slate-300"
+        >
+          {t("requests.sort.label")}
+        </label>
+        <select
+          id="requests-sort"
+          value={sortBy}
+          onChange={(e) => setSortBy(e.target.value as SortOption)}
+          aria-label={t("requests.sort.label")}
+          className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+        >
+          <option value="upvotes">{t("requests.sort.upvotes")}</option>
+          <option value="newest">{t("requests.sort.newest")}</option>
+          <option value="name">{t("requests.sort.name")}</option>
+        </select>
+      </div>
+
       <ul className="flex flex-col gap-3">
-        {requests.map((request) => (
+        {sortedRequests.map((request) => (
           <li
             key={request.id}
             className="flex items-start justify-between gap-4 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900"
@@ -222,9 +273,11 @@ export default function RequestsPageClient() {
               type="button"
               onClick={() => handleUpvote(request.id)}
               disabled={!address}
-              className="shrink-0 rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
+              aria-label={t("requests.upvote")}
+              className="flex shrink-0 items-center gap-1 rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
             >
-              {t("requests.upvote")} ({request.upvotes.length})
+              <span aria-hidden="true">▲</span>
+              <span>{request.upvoters.length}</span>
             </button>
           </li>
         ))}
