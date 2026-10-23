@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import useSWR from "swr";
 import { walletAdapter } from "@/lib/wallet";
+import { checkOriginTrusted } from "@/lib/wallet/assertWalletReady";
 import { decodeXdr, XdrMismatchError } from "@/lib/xdrReview";
 import { getBondAdapter } from "@/lib/bond/adapter";
 import { applyBondOperation } from "@/lib/bond/state";
@@ -49,6 +50,7 @@ export function useBondManagement(address: string | null, adapter: BondAdapter =
             throw new XdrMismatchError("Bond transaction contains no operations — refusing to sign.");
           }
           setStatus("awaiting-signature");
+          checkOriginTrusted();
           signedXdr = await walletAdapter.signTransaction(unsignedXdr, { network: wallet.network ?? undefined });
         }
 

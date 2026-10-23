@@ -5,6 +5,8 @@
  */
 
 import { escapeCsv } from "@/lib/csv";
+import { looksLikeSensitiveBlob } from "@/lib/secureLogging";
+import { isValidStrKey } from "@/lib/stellarAddress";
 import type { AnalyticsSummary, AnalyticsVolumePoint, AnalyticsRouteEntry } from "@/lib/analytics";
 
 // ─── CSV export ────────────────────────────────────────────────────────────────
@@ -87,6 +89,12 @@ export function buildAnalyticsCsvBundle(
 
 // ─── Shareable URL state ──────────────────────────────────────────────────────
 
+/**
+ * Audit (#648): the CSV bundle holds only aggregates (KPI totals, daily volume,
+ * source-chain/destination-token route totals) — no addresses, XDR or
+ * signatures. Share state is filter/view state only. Every value is bounded and
+ * must not look like a Stellar address or XDR blob, enforced on decode.
+ */
 export type AnalyticsShareState = {
   /** Date range start ISO string */
   from?: string;
@@ -99,6 +107,17 @@ export type AnalyticsShareState = {
 };
 
 const SHARE_PARAM = "av"; // analytics-view — short to keep URLs tidy
+const MAX_SHARE_PARAM_LENGTH = 1024;
+const MAX_SHARE_VALUE_LENGTH = 64;
+
+/** True when a share-state value is bounded and carries no address/XDR-shaped data. */
+function isSafeShareValue(v: string): boolean {
+  return (
+    v.length <= MAX_SHARE_VALUE_LENGTH &&
+    !isValidStrKey(v) &&
+    !looksLikeSensitiveBlob(v)
+  );
+}
 
 /**
  * Encode analytics filter state into a URL search-param string.
@@ -106,10 +125,10 @@ const SHARE_PARAM = "av"; // analytics-view — short to keep URLs tidy
  */
 export function encodeShareState(state: AnalyticsShareState): string {
   const compact: Record<string, string> = {};
-  if (state.from) compact.f = state.from;
-  if (state.to) compact.t = state.to;
-  if (state.chain) compact.c = state.chain;
-  if (state.token) compact.tk = state.token;
+  if (state.from && isSafeShareValue(state.from)) compact.f = state.from;
+  if (state.to && isSafeShareValue(state.to)) compact.t = state.to;
+  if (state.chain && isSafeShareValue(state.chain)) compact.c = state.chain;
+  if (state.token && isSafeShareValue(state.token)) compact.tk = state.token;
   return btoa(JSON.stringify(compact));
 }
 
@@ -118,19 +137,20 @@ export function encodeShareState(state: AnalyticsShareState): string {
  * Returns null if the param is missing, malformed, or contains unexpected keys.
  */
 export function decodeShareState(raw: string | null): AnalyticsShareState | null {
-  if (!raw) return null;
+  if (!raw || raw.length > MAX_SHARE_PARAM_LENGTH) return null;
   try {
     const decoded = JSON.parse(atob(raw)) as Record<string, unknown>;
+    if (!decoded || typeof decoded !== "object" || Array.isArray(decoded)) return null;
     const ALLOWED_KEYS = new Set(["f", "t", "c", "tk"]);
     // Validate — reject if any unexpected key is present
     for (const key of Object.keys(decoded)) {
       if (!ALLOWED_KEYS.has(key)) return null;
     }
     const state: AnalyticsShareState = {};
-    if (typeof decoded.f === "string") state.from = decoded.f;
-    if (typeof decoded.t === "string") state.to = decoded.t;
-    if (typeof decoded.c === "string") state.chain = decoded.c;
-    if (typeof decoded.tk === "string") state.token = decoded.tk;
+    if (typeof decoded.f === "string" && isSafeShareValue(decoded.f)) state.from = decoded.f;
+    if (typeof decoded.t === "string" && isSafeShareValue(decoded.t)) state.to = decoded.t;
+    if (typeof decoded.c === "string" && isSafeShareValue(decoded.c)) state.chain = decoded.c;
+    if (typeof decoded.tk === "string" && isSafeShareValue(decoded.tk)) state.token = decoded.tk;
     return state;
   } catch {
     return null;

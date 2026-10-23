@@ -5,6 +5,7 @@
  * the storage facade; purged after the retention in `STORAGE_KEYS`.
  */
 
+import { isValidStellarPublicKey } from "./stellarAddress";
 import { STORAGE_KEYS, storage } from "./storage";
 
 export type KnownAddressSource = "wallet" | "destination" | "solver";
@@ -24,7 +25,8 @@ export function getKnownAddressRecords(): KnownAddress[] {
   if (!Array.isArray(parsed)) return [];
   return parsed.filter(
     (e): e is KnownAddress =>
-      !!e && typeof e === "object" && typeof (e as KnownAddress).address === "string",
+      !!e && typeof e === "object" && typeof (e as KnownAddress).address === "string" &&
+      isValidStellarPublicKey((e as KnownAddress).address),
   );
 }
 
@@ -33,7 +35,7 @@ export function getKnownAddresses(): string[] {
 }
 
 export function recordKnownAddress(address: string, source: KnownAddressSource): void {
-  if (!address) return;
+  if (!address || !isValidStellarPublicKey(address)) return;
   const rest = getKnownAddressRecords().filter((e) => e.address !== address);
   const next = [{ address, source, lastSeen: Date.now() }, ...rest].slice(0, MAX_KNOWN_ADDRESSES);
   storage.setJSON(KEY, next);

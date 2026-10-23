@@ -1,3 +1,4 @@
+import { looksLikeSensitiveBlob } from "@/lib/secureLogging";
 import { sanitizeDisplayText } from "@/lib/textSafety";
 import type { IntentDetail } from "@/lib/types";
 
@@ -8,7 +9,9 @@ const REDACTED_KEY_RE = /xdr|signature|secret/i;
 
 /** Deep copy with XDR/signature-like keys removed and strings made display-safe. */
 export function redactForExport(value: unknown): unknown {
-  if (typeof value === "string") return sanitizeDisplayText(value);
+  if (typeof value === "string") {
+    return looksLikeSensitiveBlob(value) ? "[redacted]" : sanitizeDisplayText(value);
+  }
   if (Array.isArray(value)) return value.map(redactForExport);
   if (typeof value === "object" && value !== null) {
     return Object.fromEntries(

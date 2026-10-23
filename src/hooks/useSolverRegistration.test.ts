@@ -64,6 +64,7 @@ vi.mock("@/lib/xdrReview", () => {
 });
 
 vi.mock("@/lib/wallet/assertWalletReady", () => ({
+  checkOriginTrusted: vi.fn(),
   assertWalletReady: assertWalletReadyMock,
   UntrustedOriginError: class UntrustedOriginError extends Error {
     constructor(hostname: string) {
