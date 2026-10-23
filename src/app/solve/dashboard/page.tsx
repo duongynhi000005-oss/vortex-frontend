@@ -48,10 +48,13 @@ function usePersistedFlag(key: string): [boolean, (v: boolean) => void] {
   return [value, update];
 }
 
-function Panel({ title, children }: { title: string; children: React.ReactNode }) {
+function Panel({ title, badge, children }: { title: string; badge?: React.ReactNode; children: React.ReactNode }) {
   return (
     <section className="card p-4 sm:p-5" aria-label={title}>
-      <h2 className="eyebrow text-xs mb-3">{title}</h2>
+      <h2 className="eyebrow text-xs mb-3 flex items-center gap-2">
+        {title}
+        {badge}
+      </h2>
       {children}
     </section>
   );
@@ -78,15 +81,16 @@ export default function SolverDashboardPage() {
   const myFills = useMemo(() => items.filter((i) => i.solver === solver?.address), [items, solver?.address]);
   const stats30 = useMemo(() => computeSolverStats(myFills, 30, now), [myFills, now]);
   const earnings = useMemo(() => estimateEarnings(myFills), [myFills]);
+  const expiring = useMemo(() => expiringSoon(active, now), [active, now]);
 
   useEffect(() => {
     if (!notifyExpiry) return;
-    for (const intent of expiringSoon(active, now)) {
+    for (const intent of expiring) {
       if (notified.current.has(intent.id)) continue;
       notified.current.add(intent.id);
       addToast(t("solverDashboard.notify.expiring", { id: intent.id }), "info");
     }
-  }, [active, now, notifyExpiry, addToast, t]);
+  }, [expiring, notifyExpiry, addToast, t]);
 
   const blur = hideBalances ? "blur-sm select-none" : "";
   const notSolver = error instanceof ApiError && error.status === 404;
@@ -186,7 +190,16 @@ export default function SolverDashboardPage() {
             <p className="text-[10px] text-vx-muted mt-2">{t("solverDashboard.earnings.formula", { bps: SOLVER_FEE_BPS })}</p>
           </Panel>
 
-          <Panel title={t("solverDashboard.active.title")}>
+          <Panel
+            title={t("solverDashboard.active.title")}
+            badge={
+              expiring.length > 0 && (
+                <span className="chip bg-vx-amber/15 text-vx-amber num">
+                  {t("solverDashboard.active.expiringBadge", { count: expiring.length })}
+                </span>
+              )
+            }
+          >
             {active.length === 0 ? (
               <p className="text-xs text-vx-muted">{t("solverDashboard.active.empty")}</p>
             ) : (
