@@ -10,9 +10,9 @@ export type GovernanceProposalStatus =
   | "expired";
 
 /**
- * A proposal that changes one numeric protocol parameter. Only
- * `minSolverBondUsd` currently gets an automated impact preview (see
- * `src/lib/governanceImpact.ts`).
+ * A proposal that changes one numeric protocol parameter. Only parameters with
+ * an entry in `PARAMETER_IMPACT_REGISTRY` (see `src/lib/governanceImpact.ts`)
+ * get an automated impact preview.
  */
 export type ParameterChange = {
   parameter: "minSolverBondUsd" | (string & {});
