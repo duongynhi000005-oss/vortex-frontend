@@ -53,6 +53,14 @@ export const STORAGE_KEYS = {
     retentionMs: DAY,
     owner: "src/hooks/useLocalStorageDraft.ts",
   },
+  intentNotes: {
+    key: "vortex:intent-notes:",
+    prefix: true,
+    purpose: "privacy.purpose.intentNotes",
+    sensitivity: "personal",
+    retentionMs: null,
+    owner: "src/lib/intentNotes.ts",
+  },
   knownAddresses: {
     key: "vortex:knownAddresses",
     purpose: "privacy.purpose.knownAddresses",
