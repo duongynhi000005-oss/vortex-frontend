@@ -18,9 +18,9 @@ jobs:
       build-id: ${{ steps.build.outputs.build-id }}
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 20
           cache: 'npm'
@@ -64,7 +64,7 @@ jobs:
           find .next -name '*.map' -delete
 
       - name: Upload build artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: nextjs-build-${{ steps.build.outputs.build-id }}
           path: .next
@@ -74,7 +74,7 @@ jobs:
         run: node scripts/generate-sbom.mjs sbom.json
 
       - name: Upload SBOM artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: sbom
           path: sbom.json
@@ -90,9 +90,9 @@ jobs:
     environment: production
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 20
           cache: 'npm'
@@ -101,13 +101,13 @@ jobs:
         run: npm ci
 
       - name: Download build artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@fc02353415da80201a0da48ab47022efd7725d11 # v4.3.0
         with:
           name: nextjs-build-${{ needs.build.outputs.build-id }}
           path: .next
 
       - name: Download SBOM artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@fc02353415da80201a0da48ab47022efd7725d11 # v4.3.0
         with:
           name: sbom
           path: .
@@ -142,7 +142,7 @@ jobs:
 
       - name: Create deployment status
         if: steps.deploy.outputs.deployed == 'true'
-        uses: actions/github-script@v9
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
             const deployment = await github.rest.repos.createDeployment({

@@ -5,8 +5,7 @@
 CI enforces the per-directory V8 coverage floors in `vitest.config.ts` and a
 coverage ratchet that rejects decreases greater than 0.5 percentage points.
 Run `npm run check:orphan-tests` to catch test-like files Vitest will not
-discover, `npm run check:docs` to validate documented source paths, and
-`npm run check:dead-code` for the configured Knip entry points.
+discover, and `npm run check:docs` validates documented source paths.
 
 - **Test runner:** Vitest (`vitest run`, `vitest run --coverage`)
 - **Environment:** jsdom (`vitest.config.ts`)

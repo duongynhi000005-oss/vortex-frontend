@@ -25,6 +25,7 @@
     "check:mutation-summary": "node scripts/mutation-summary.mjs",
     "test:e2e": "playwright test",
     "check:i18n": "node scripts/check-i18n-parity.mjs",
+    "check:orphan-tests": "node scripts/check-orphan-tests.mjs",
     "check:docs": "node scripts/check-docs.mjs",
     "check:manifest": "node scripts/check-manifest.mjs",
     "check:dependencies": "node scripts/check-dependencies.mjs",

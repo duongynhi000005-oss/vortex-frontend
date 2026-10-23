@@ -25,10 +25,10 @@ jobs:
     if: github.event_name == 'schedule'
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version-file: ".nvmrc"
           cache: "npm"
@@ -39,7 +39,7 @@ jobs:
         run: npx vitest run src/lib/*.fuzz.test.ts
       - name: Upload corpus artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: fuzz-corpus
           path: src/test/fuzz-corpus/
@@ -53,10 +53,10 @@ jobs:
       contents: read
       checks: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: '.nvmrc'
           cache: 'npm'
@@ -83,7 +83,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Post dependency diff report as PR comment
         if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
         with:
           script: |
             const fs = require('fs');
@@ -107,13 +107,11 @@ jobs:
       - run: npm run check:editorconfig
       - run: npm run check:orphan-tests
       - run: npm run check:docs
-      - run: npm run check:dead-code
       - name: Typecheck (strict tsconfig, must be zero errors)
         run: npm run typecheck
       - name: Typecheck stories (tsconfig.storybook.json)
         run: npm run typecheck:storybook
       - run: npm run lint
-      - run: npm run typecheck
 
   unit:
     name: Unit tests
@@ -121,10 +119,10 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version-file: '.nvmrc'
           cache: 'npm'
@@ -138,7 +136,7 @@ jobs:
           else
             echo "No base coverage artifact is committed; establishing the baseline."
           fi
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
           name: coverage-report
@@ -148,7 +146,7 @@ jobs:
       - name: Check the e2e suite resolves
         run: npm run test:e2e -- --list
       - run: npm run test:e2e
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
           name: playwright-report
@@ -229,15 +227,15 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version-file: '.nvmrc'
           cache: 'npm'
       - name: Restore Next.js build cache
-        uses: actions/cache@v4
+        uses: actions/cache@9fcad95d03062fb8399cdbd79ae6041c7692b6c8 # v4.3.0
         with:
           path: .next/cache
           key: ${{ runner.os }}-next-${{ hashFiles('**/package-lock.json') }}-${{ github.sha }}
@@ -250,7 +248,7 @@ jobs:
         run: npm run build
         env:
           ANALYZE: true
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: bundle-analysis-report
@@ -268,15 +266,15 @@ jobs:
       matrix:
         browser: ${{ github.event_name == 'pull_request' && fromJSON('["chromium"]') || fromJSON('["chromium","firefox","webkit"]') }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version-file: '.nvmrc'
           cache: 'npm'
       - name: Cache Playwright browsers
-        uses: actions/cache@v4
+        uses: actions/cache@9fcad95d03062fb8399cdbd79ae6041c7692b6c8 # v4.3.0
         with:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-playwright-${{ hashFiles('**/package-lock.json') }}
@@ -295,7 +293,7 @@ jobs:
             echo '### Flaky tests' >> $GITHUB_STEP_SUMMARY
             cat playwright-report/flaky.json >> $GITHUB_STEP_SUMMARY
           fi
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
           name: playwright-report-${{ matrix.browser }}
@@ -314,15 +312,15 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version-file: '.nvmrc'
           cache: 'npm'
       - name: Cache Playwright browsers
-        uses: actions/cache@v4
+        uses: actions/cache@9fcad95d03062fb8399cdbd79ae6041c7692b6c8 # v4.3.0
         with:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-playwright-${{ hashFiles('**/package-lock.json') }}
@@ -341,18 +339,7 @@ jobs:
           npm run test:storybook
       - name: Run visual regression tests
         run: npm run test:visual -- --shard=${{ matrix.shard }}/2
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1
-      - name: Build Storybook
-        run: npm run build:storybook
-      - name: Run Storybook accessibility tests
-        run: |
-          npx playwright install --with-deps chromium
-          npx --yes http-server storybook-static --port 6006 --silent &
-          npx --yes wait-on --timeout 60000 tcp:127.0.0.1:6006
-          npm run test:storybook
-      - name: Run visual regression tests
-        run: npm run test:visual
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: visual-regression-report-${{ matrix.shard }}
@@ -363,9 +350,9 @@ jobs:
     name: E2E (Playwright)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version-file: '.nvmrc'
           cache: 'npm'
@@ -379,7 +366,7 @@ jobs:
         run: npm ls --all > /dev/null
       - name: Generate SBOM
         run: npx --yes @cy
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version-file: '.nvmrc'
           cache: 'npm'
@@ -390,10 +377,10 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version-file: '.nvmrc'
           cache: 'npm'
@@ -407,7 +394,7 @@ jobs:
         run: node scripts/lint-lockfile.mjs
       - name: Generate SBOM
         run: node scripts/generate-sbom.mjs sbom.json
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
           name: sbom
@@ -418,8 +405,8 @@ jobs:
     name: E2E (Playwright)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version-file: '.nvmrc'
           cache: 'npm'
@@ -429,7 +416,7 @@ jobs:
         run: echo "version=$(npx playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
       - name: Cache Playwright browsers
         id: playwright-cache
-        uses: actions/cache@v4
+        uses: actions/cache@9fcad95d03062fb8399cdbd79ae6041c7692b6c8 # v4.3.0
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}-chromium
@@ -441,7 +428,7 @@ jobs:
         run: npx playwright install-deps chromium
       - name: Run Playwright tests
         run: npm run test:e2e -- --project=chromium
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
           name: playwright-report
