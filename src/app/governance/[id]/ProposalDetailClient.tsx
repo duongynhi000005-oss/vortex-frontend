@@ -19,6 +19,7 @@ import { VotingPowerPanel } from "@/components/VotingPowerPanel";
 import { useWalletStore } from "@/store/wallet";
 import { useProposal, useProposalComments } from "@/hooks/useGovernance";
 import { useVotingPower } from "@/hooks/useVotingPower";
+import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
 import { timeRemaining } from "@/lib/time";
 import { getMessage } from "@/i18n/messages";
 import { signCommentMessage, verifySignedComment } from "@/lib/wallet/signMessage";
@@ -29,6 +30,7 @@ const PAGE_SIZE = 20;
 const RATE_LIMIT_WINDOW_MS = 10_000;
 const RATE_LIMIT_HOURLY = 10;
 const HIDDEN_COMMENTS_KEY = "vx.governance.hiddenComments";
+const HIGHLIGHT_DURATION_MS = 2000;
 
 function truncateAddress(addr: string): string {
   if (!addr || addr.length < 10) return addr;
@@ -126,9 +128,24 @@ export default function ProposalDetailClient({ proposalId }: { proposalId: strin
   const [hiddenIds, setHiddenIds] = useState<string[]>([]);
   const [verifiedIds, setVerifiedIds] = useState<Record<string, boolean>>({});
   const postTimestampsRef = useRef<number[]>([]);
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const [hashId, setHashId] = useState<string | null>(null);
+  const [highlightId, setHighlightId] = useState<string | null>(null);
+  const handledHashRef = useRef<string | null>(null);
+  const { copy: copyToClipboard } = useCopyToClipboard();
 
   useEffect(() => {
     setHiddenIds(loadHiddenIds());
+  }, []);
+
+  useEffect(() => {
+    const readHash = () => {
+      const hash = window.location.hash.slice(1);
+      setHashId(hash.startsWith("c-") ? hash : null);
+    };
+    readHash();
+    window.addEventListener("hashchange", readHash);
+    return () => window.removeEventListener("hashchange", readHash);
   }, []);
 
   useEffect(() => {
@@ -151,6 +168,38 @@ export default function ProposalDetailClient({ proposalId }: { proposalId: strin
   const visibleComments = useMemo(
     () => comments.filter((c) => !hiddenIds.includes(c.id)),
     [comments, hiddenIds]
+  );
+
+  const pagedComments = visibleComments.slice(0, visibleCount);
+  const hasMore = visibleComments.length > pagedComments.length;
+  const hashIndex = hashId ? visibleComments.findIndex((c) => c.id === hashId) : -1;
+  const hashBeyondPage = hashIndex >= visibleCount;
+
+  const handleLoadOlder = useCallback(() => {
+    setVisibleCount((n) => n + PAGE_SIZE);
+  }, []);
+
+  // Scroll to and briefly highlight the permalinked comment once it is on the page.
+  useEffect(() => {
+    if (!hashId || handledHashRef.current === hashId) return;
+    const index = visibleComments.findIndex((c) => c.id === hashId);
+    if (index === -1 || index >= visibleCount) return;
+    const el = document.getElementById(hashId);
+    if (!el) return;
+    handledHashRef.current = hashId;
+    el.scrollIntoView({ block: "center" });
+    setHighlightId(hashId);
+    const timer = setTimeout(() => setHighlightId(null), HIGHLIGHT_DURATION_MS);
+    return () => clearTimeout(timer);
+  }, [hashId, visibleComments, visibleCount]);
+
+  const handleCopyLink = useCallback(
+    (id: string) => {
+      const url = new URL(window.location.href);
+      url.hash = id;
+      return copyToClipboard(url.toString(), "Comment link copied");
+    },
+    [copyToClipboard]
   );
 
   const handleHide = useCallback((id: string) => {
@@ -437,7 +486,9 @@ export default function ProposalDetailClient({ proposalId }: { proposalId: strin
                   onClick={handleLoadOlder}
                   className="px-3 py-1.5 text-xs font-semibold text-vx-sage border border-vx-sage/30 rounded-lg hover:bg-vx-sage/10 transition-colors"
                 >
-                  {getMessage("solve.governance.loadOlderComments")}
+                  {hashBeyondPage
+                    ? "Load more to find this comment"
+                    : getMessage("solve.governance.loadOlderComments")}
                 </button>
               </div>
             )}
@@ -446,10 +497,13 @@ export default function ProposalDetailClient({ proposalId }: { proposalId: strin
                 No comments posted yet. Be the first to share your thoughts!
               </p>
             ) : (
-              visibleComments.map((comment) => (
+              pagedComments.map((comment) => (
                 <article
                   key={comment.id}
-                  className="p-4 rounded-xl bg-vx-surface/40 border border-vx-border space-y-2"
+                  id={comment.id}
+                  className={`p-4 rounded-xl bg-vx-surface/40 border border-vx-border space-y-2 scroll-mt-24 transition-shadow ${
+                    highlightId === comment.id ? "ring-2 ring-vx-sage" : ""
+                  }`}
                 >
                   <div className="flex items-center justify-between gap-2 flex-wrap">
                     <div className="flex items-center gap-2">
@@ -474,6 +528,13 @@ export default function ProposalDetailClient({ proposalId }: { proposalId: strin
                       <time className="text-[10px] text-vx-dim" dateTime={new Date(comment.createdAt).toISOString()}>
                         {new Date(comment.createdAt).toLocaleString()}
                       </time>
+                      <button
+                        type="button"
+                        onClick={() => void handleCopyLink(comment.id)}
+                        className="text-[10px] text-vx-dim hover:text-vx-sage transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-vx-sage rounded"
+                      >
+                        Copy link
+                      </button>
                       <button
                         type="button"
                         onClick={() => handleReport(comment.id)}
