@@ -352,14 +352,28 @@ export function DonutChart(props: ChartProps) {
   );
 }
 
-export function Sparkline({ series, width = 120, height = 32 }: ChartProps) {
+export function Sparkline({
+  series,
+  width = 120,
+  height = 32,
+  title,
+  summary,
+  className,
+}: ChartProps) {
   const data = useMemo(() => filterFinite(series[0]?.data ?? []), [series]);
   const x = bandScale(data.length, [0, width]);
   const y = linearScale([0, Math.max(1, ...data.map((d) => d.value))], [height, 0]);
   const points = data.map((d, i) => `${x(i)},${y(d.value)}`).join(' ');
+  const accessibleLabel = summary || title || (series[0]?.name ? `${series[0].name} trend` : 'Trend');
   return (
-    <svg role="img" width={width} height={height} className="max-w-full">
-      <polyline fill="none" stroke={chartColor(0)} strokeWidth={1.5} points={points} />
-    </svg>
+    <figure className={className}>
+      {summary ? <p className="sr-only">{summary}</p> : null}
+      <svg role="img" aria-label={accessibleLabel} width={width} height={height} className="max-w-full">
+        <polyline fill="none" stroke={chartColor(0)} strokeWidth={1.5} points={points} />
+      </svg>
+      <div className="sr-only">
+        <ChartTable series={series} />
+      </div>
+    </figure>
   );
 }

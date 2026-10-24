@@ -1,8 +1,5 @@
 'use client';
 
-import { useMemo } from 'react';
-import { useMotionPreference } from '@/lib/useMotionPreference';
-
 export type IntentStatus =
   | 'pending'
   | 'processing'
@@ -37,9 +34,13 @@ const STATUS_ICONS: Record<IntentStatus, string> = {
   cancelled: '\u2298',
 };
 
-      <span aria-hidden="true" className={iconClassName}>
-        {icon}
-      </span>
+export function IntentStatusBadge({
+  status,
+  label,
+  className,
+  verified = false,
+}: IntentStatusBadgeProps & { verified?: boolean }) {
+  const text = label ?? status;
 
   return (
     <span

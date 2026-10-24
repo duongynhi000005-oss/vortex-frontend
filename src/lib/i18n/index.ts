@@ -50,6 +50,7 @@ export const LOCALE_HEADER = "x-vortex-locale";
 export const LOCALE_DIRECTIONS: Record<Locale, "ltr" | "rtl"> = {
   en: "ltr",
   es: "ltr",
+  [PSEUDO_LOCALE]: "ltr",
 };
 
 /** Locales written right-to-left. Used to set `dir` on <html> and to mirror UI. */

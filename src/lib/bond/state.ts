@@ -1,4 +1,4 @@
-import { formatAmount, parseAmount, ZERO } from "@/lib/decimal";
+import { formatAmount, parseAmountToStroops as parseAmount, ZERO } from "@/lib/decimal";
 import type { BondOperationKind, BondState } from "./types";
 
 /** Expected state after an operation; used for optimistic updates and the mock adapter. */

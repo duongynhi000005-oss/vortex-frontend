@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Nav } from "@/components/Nav";
+import { Footer } from "@/components/Footer";
+import { GitHubContributorsWall } from "@/components/contributors/GitHubContributorsWall";
 import type { ComplexityTier, IssueStatus, WaveMetrics } from "@/lib/issuesParser";
 import { useTranslation } from "@/lib/i18n/I18nProvider";
 import type { MessageKey } from "@/lib/i18n";
@@ -112,10 +114,10 @@ export default function ContributorsPageClient({ metrics }: { metrics: WaveMetri
         <div className="mb-8 sm:mb-10">
           <div className="eyebrow mb-2 sm:mb-3 text-xs">{t("wave.eyebrow")}</div>
           <h1 className="text-2xl sm:text-3xl font-bold text-vx-text mb-2 sm:mb-3">
-            {t("wave.title")}
+            {t("contributors.title")}
           </h1>
           <p className="text-vx-muted text-xs sm:text-sm max-w-2xl leading-relaxed">
-            {t("wave.description")}
+            {t("contributors.description")}
           </p>
         </div>
 
@@ -234,6 +236,9 @@ export default function ContributorsPageClient({ metrics }: { metrics: WaveMetri
             </div>
           </div>
         </div>
+
+        {/* GitHub Contributors Wall */}
+        <GitHubContributorsWall />
 
         {/* Contributor Leaderboard */}
         <div className="card overflow-hidden mb-10">
@@ -442,6 +447,7 @@ export default function ContributorsPageClient({ metrics }: { metrics: WaveMetri
           </div>
         </div>
       </main>
+      <Footer />
     </div>
   );
 }

@@ -10,6 +10,11 @@ vi.mock("@/components/Nav", () => ({
 vi.mock("@/components/Footer", () => ({
   Footer: () => <footer aria-label="footer" />,
 }));
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
+  usePathname: () => "/contributors",
+  useSearchParams: () => new URLSearchParams(),
+}));
 
 function renderPage() {
   const { unmount } = render(
