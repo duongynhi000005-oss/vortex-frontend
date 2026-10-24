@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Nav } from "@/components/Nav";
 import { Footer } from "@/components/Footer";
 import { useBondManagement } from "@/hooks/useBondManagement";
@@ -32,14 +33,16 @@ function AmountForm({
   bond,
   busy,
   onSubmit,
+  initialAmount = "",
 }: {
   kind: BondOperationKind;
   bond: BondState;
   busy: boolean;
   onSubmit: (amount: string) => Promise<boolean>;
+  initialAmount?: string;
 }) {
   const { t } = useTranslation();
-  const [amount, setAmount] = useState("");
+  const [amount, setAmount] = useState(initialAmount);
   const [confirmed, setConfirmed] = useState(false);
   const id = `bond-${kind}`;
   const check = amount ? checkBondAmount(kind, amount, bond) : null;
@@ -111,6 +114,8 @@ function AmountForm({
 
 export default function BondManagePageClient() {
   const { t } = useTranslation();
+  const searchParams = useSearchParams();
+  const topUpParam = searchParams.get("topUp") ?? searchParams.get("amount") ?? searchParams.get("shortfall") ?? "";
   const address = useWalletStore((s) => s.address);
   const connect = useWalletStore((s) => s.connect);
   const networkMismatch = useWalletStore((s) => s.networkMismatch);
@@ -203,7 +208,7 @@ export default function BondManagePageClient() {
             )}
 
             <div className="grid sm:grid-cols-2 gap-4">
-              <AmountForm kind="top-up" bond={bond} busy={busy || networkMismatch} onSubmit={manager.topUp} />
+              <AmountForm kind="top-up" bond={bond} busy={busy || networkMismatch} onSubmit={manager.topUp} initialAmount={topUpParam} />
               <AmountForm kind="withdrawal" bond={bond} busy={busy || networkMismatch} onSubmit={manager.requestWithdrawal} />
             </div>
           </>

@@ -24,6 +24,7 @@ vi.mock("@/hooks/useIntentFeed", () => ({ useIntentFeed: () => ({ items: [] }) }
 vi.mock("@/components/Nav", () => ({ Nav: () => null }));
 vi.mock("@/components/Footer", () => ({ Footer: () => null }));
 vi.mock("@/components/ConnectWalletButton", () => ({ ConnectWalletButton: () => <button>connect</button> }));
+vi.mock("@/components/charts", () => ({ BarChart: () => null }));
 
 import SolverDashboardPage from "./page";
 import { ApiError } from "@/lib/api";
@@ -65,7 +66,50 @@ describe("SolverDashboardPage gating", () => {
     };
     render(<SolverDashboardPage />);
     expect(screen.getByRole("alert").textContent).toContain("Bond is below the 50 USDC minimum.");
+    const topUpLink = screen.getByRole("link", { name: /Top up bond by \$30/i });
+    expect(topUpLink).toBeTruthy();
+    expect(topUpLink.getAttribute("href")).toBe("/solve/manage?topUp=30");
     expect(screen.getByText("Bond health")).toBeTruthy();
     expect(screen.getByText("No accepted intents in progress.")).toBeTruthy();
+  });
+
+  it("does not render top-up link when inactive reason is only status", () => {
+    state.address = ADDRESS;
+    state.solver.solver = {
+      name: "Me",
+      address: ADDRESS,
+      bondUsd: 100,
+      fills: 0,
+      failed: 0,
+      volumeUsd: 0,
+      avgFillTimeSeconds: 0,
+      successRatePct: 0,
+      chains: [],
+      status: "inactive",
+    };
+    render(<SolverDashboardPage />);
+    const alert = screen.getByRole("alert");
+    expect(alert.textContent).toContain("Solver status is set to inactive.");
+    expect(alert.textContent).not.toContain("Bond is below");
+    expect(screen.queryByRole("link", { name: /Top up bond/i })).toBeNull();
+  });
+
+  it("does not render inactive alert when solver is active and bond meets minimum", () => {
+    state.address = ADDRESS;
+    state.solver.solver = {
+      name: "Me",
+      address: ADDRESS,
+      bondUsd: 100,
+      fills: 0,
+      failed: 0,
+      volumeUsd: 0,
+      avgFillTimeSeconds: 0,
+      successRatePct: 0,
+      chains: [],
+      status: "active",
+    };
+    render(<SolverDashboardPage />);
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.queryByRole("link", { name: /Top up bond/i })).toBeNull();
   });
 });

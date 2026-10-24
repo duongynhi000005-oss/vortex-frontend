@@ -11,6 +11,7 @@ import { useIntentFeed } from "@/hooks/useIntentFeed";
 import { useWalletStore } from "@/store/wallet";
 import { useToastStore } from "@/store/toast";
 import { useTranslation } from "@/lib/i18n/I18nProvider";
+import type { MessageKey } from "@/lib/i18n";
 import { ApiError } from "@/lib/api";
 import { timeRemaining } from "@/lib/time";
 import { downloadCsv } from "@/lib/csv";
@@ -19,17 +20,24 @@ import {
   MIN_BOND_USD,
   activeIntents,
   bondHealth,
+  bondShortfall,
   buildSolverDashboardExport,
   expiringSoon,
   fillCounts,
   inactiveReasons,
   solverDashboardCsv,
+  type InactiveReason,
 } from "@/lib/solverDashboard";
 import { BarChart } from "@/components/charts";
 
 const HIDE_BALANCES_KEY = "vortex:solver-dashboard:hide-balances";
 const NOTIFY_EXPIRY_KEY = "vortex:solver-dashboard:notify-expiry";
 const FOCUS_RING = "focus:outline-none focus-visible:ring-2 focus-visible:ring-vx-sage";
+
+const INACTIVE_REASON_KEYS: Record<InactiveReason, MessageKey> = {
+  status: "solverDashboard.inactive.status",
+  bondBelowMinimum: "solverDashboard.inactive.bondBelowMinimum",
+};
 
 /** Renders a chart value with the same 7-dp digits the earnings list shows. */
 function formatEarning(value: number): string {
@@ -158,10 +166,25 @@ export default function SolverDashboardPage() {
         {reasons.length > 0 && (
           <div role="alert" className="card p-4 border border-vx-amber/40 text-sm text-vx-text">
             <p className="font-semibold mb-1">{t("solverDashboard.inactive.title")}</p>
-            <ul className="list-disc ml-5 text-xs text-vx-muted">
-              {reasons.map((r) => (
-                <li key={r}>{t(`solverDashboard.inactive.${r}`, { minBond: MIN_BOND_USD })}</li>
-              ))}
+            <ul className="list-disc ml-5 text-xs text-vx-muted space-y-1">
+              {reasons.map((r) => {
+                if (r === "bondBelowMinimum") {
+                  const shortfall = bondShortfall(solver);
+                  return (
+                    <li key={r} className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span>{t(INACTIVE_REASON_KEYS[r], { minBond: MIN_BOND_USD })}</span>
+                      <Link
+                        href={`/solve/manage?topUp=${shortfall}`}
+                        className={`inline-flex items-center gap-1 font-semibold text-vx-sage hover:underline rounded ${FOCUS_RING}`}
+                        aria-label={t("solverDashboard.inactive.topUpAction", { shortfall })}
+                      >
+                        {t("solverDashboard.inactive.topUpLink")} →
+                      </Link>
+                    </li>
+                  );
+                }
+                return <li key={r}>{t(INACTIVE_REASON_KEYS[r], { minBond: MIN_BOND_USD })}</li>;
+              })}
             </ul>
           </div>
         )}

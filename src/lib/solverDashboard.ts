@@ -105,3 +105,6 @@ export function inactiveReasons(solver: Solver, minBondUsd: number = MIN_BOND_US
   if (solver.bondUsd < minBondUsd) reasons.push("bondBelowMinimum");
   return reasons;
 }
+export function bondShortfall(solver: Solver, minBondUsd: number = MIN_BOND_USD): number {
+  return Math.max(0, minBondUsd - solver.bondUsd);
+}

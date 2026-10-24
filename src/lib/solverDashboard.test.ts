@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { activeIntents, bondHealth, expiringSoon, fillCounts, inactiveReasons } from "./solverDashboard";
+import { activeIntents, bondHealth, expiringSoon, fillCounts, inactiveReasons, bondShortfall } from "./solverDashboard";
 import type { FeedItem, Solver } from "./types";
 
 const ME = "GDR4FJGZFDFHXGDM66DLF4GNMNKR4BF7BFAKEA6URFRHWAPLFL3REFRB";
@@ -56,4 +56,11 @@ describe("solverDashboard", () => {
     expect(inactiveReasons(s)).toEqual(["status", "bondBelowMinimum"]);
     expect(inactiveReasons({ ...s, status: "active", bondUsd: 100 })).toEqual([]);
   });
+  it("computes bond shortfall against minimum bond", () => {
+    expect(bondShortfall({ bondUsd: 20 } as Solver)).toBe(30);
+    expect(bondShortfall({ bondUsd: 50 } as Solver)).toBe(0);
+    expect(bondShortfall({ bondUsd: 100 } as Solver)).toBe(0);
+    expect(bondShortfall({ bondUsd: 10 } as Solver, 100)).toBe(90);
+  });
+
 });
