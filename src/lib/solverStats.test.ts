@@ -8,6 +8,7 @@ import {
   estimateEarnings,
   filterByStatus,
   groupByWeek,
+  solverWeeklyBuckets,
   isoWeekKey,
   isoWeekStart,
   parseCompareParams,
@@ -190,5 +191,28 @@ describe("earnings", () => {
       { token: "EURC", amount: "0.05" },
       { token: "USDC", amount: "123456789012345.6785" },
     ]);
+  });
+});
+
+describe("solverWeeklyBuckets", () => {
+  it("groups fills for a specific solver chronologically and ignores others", () => {
+    const items = [
+      fill({ solver: A, createdAt: "2025-01-01T00:00:00Z" }),
+      fill({ solver: B, createdAt: "2025-01-01T12:00:00Z" }),
+      fill({ solver: A.toLowerCase(), createdAt: "2025-01-02T00:00:00Z" }),
+      fill({ solver: A, createdAt: "2024-12-18T00:00:00Z" }),
+      fill({ solver: C, createdAt: "2025-01-03T00:00:00Z" }),
+    ];
+    const bucketsA = solverWeeklyBuckets(items, A);
+    expect(bucketsA).toEqual([
+      { week: "2024-W51", count: 1 },
+      { week: "2025-W01", count: 2 },
+    ]);
+  });
+
+  it("returns empty array when solver has no matching fills", () => {
+    const items = [fill({ solver: B, createdAt: "2025-01-01T00:00:00Z" })];
+    expect(solverWeeklyBuckets(items, A)).toEqual([]);
+    expect(solverWeeklyBuckets([], A)).toEqual([]);
   });
 });

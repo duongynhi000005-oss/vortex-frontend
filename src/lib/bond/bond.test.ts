@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatAmount, parseAmount } from "@/lib/decimal";
+import { formatAmount, parseAmountToStroops as parseAmount } from "@/lib/decimal";
 import { applyBondOperation } from "./state";
 import { bondFeatureMode } from "./flag";
 import { checkBondAmount, thresholdStatus } from "./validation";

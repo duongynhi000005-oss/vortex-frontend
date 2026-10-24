@@ -1,4 +1,4 @@
-import { parseAmount, ZERO } from "@/lib/decimal";
+import { parseAmountToStroops as parseAmount, ZERO } from "@/lib/decimal";
 import type { BondOperationKind, BondState } from "./types";
 
 /** Upper bound for a single top-up, guarding against fat-finger inputs. */

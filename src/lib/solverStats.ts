@@ -281,3 +281,10 @@ export function estimateEarnings(fills: FeedItem[], feeBps: number = SOLVER_FEE_
 export function normalizeAddress(address: string | null | undefined): string {
   return (address ?? "").trim().toUpperCase();
 }
+
+/** Extracts and groups fills by ISO week for a specific solver. */
+export function solverWeeklyBuckets(items: FeedItem[], solverAddress: string): Array<{ week: string; count: number }> {
+  const target = normalizeAddress(solverAddress);
+  const matching = items.filter((i) => normalizeAddress(i.solver) === target);
+  return groupByWeek(matching);
+}

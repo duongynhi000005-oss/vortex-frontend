@@ -6,6 +6,10 @@ import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { SkeletonCard } from "@/components/Skeleton";
 import { SolverIdentityChip } from "@/components/SolverBadge";
 import { useSolvers } from "@/hooks/useSolvers";
+import { useIntentFeed } from "@/hooks/useIntentFeed";
+import { Sparkline } from "@/components/charts";
+import { groupByWeek, normalizeAddress } from "@/lib/solverStats";
+import type { FeedItem } from "@/lib/types";
 import { useSolverIdentity } from "@/hooks/useSolverIdentity";
 import { useColumnVisibility } from "@/hooks/useColumnVisibility";
 import { useQueryState } from "@/hooks/useQueryState";
@@ -30,7 +34,7 @@ import {
   type RankedSolver,
 } from "@/lib/solverRanking";
 
-const COLUMN_IDS = ["rank", "name", "fills", "volumeUsd", "successRate", "avgFillTimeSeconds", "bondUsd"] as const;
+const COLUMN_IDS = ["rank", "name", "fills", "volumeUsd", "volumeTrend", "successRate", "avgFillTimeSeconds", "bondUsd"] as const;
 type ColumnId = (typeof COLUMN_IDS)[number];
 const ALWAYS_VISIBLE: readonly ColumnId[] = ["rank", "name"];
 
@@ -79,6 +83,44 @@ function SolverNameCell({ solver }: { solver: RankedSolver }) {
   );
 }
 
+function SolverVolumeSparkline({ solver, fills }: { solver: RankedSolver; fills: FeedItem[] }) {
+  const { t } = useTranslation();
+  const weekly = useMemo(() => groupByWeek(fills), [fills]);
+  const series = useMemo(
+    () => [
+      {
+        name: sanitizeDisplayText(solver.name),
+        data: weekly.map((w) => ({ label: w.week, value: w.count })),
+      },
+    ],
+    [solver.name, weekly],
+  );
+
+  if (weekly.length === 0) {
+    return (
+      <span className="text-xs text-vx-muted font-normal">
+        {t("solve.leaderboard.noTrend")}
+      </span>
+    );
+  }
+
+  const summary = t("solve.leaderboard.sparklineLabel", {
+    solver: sanitizeDisplayText(solver.name),
+    weeks: weekly.length,
+  });
+
+  return (
+    <Sparkline
+      series={series}
+      width={96}
+      height={24}
+      title={t("solve.leaderboard.trend")}
+      summary={summary}
+      className="inline-block"
+    />
+  );
+}
+
 function readFilters(params: URLSearchParams): LeaderboardFilters {
   const status = params.get("status");
   const minBond = Number(params.get("minBond"));
@@ -101,6 +143,17 @@ export function SolverLeaderboard() {
   const sorts = parseSorts<LeaderboardSortKey>(params.get("sort"), LEADERBOARD_SORT_KEYS);
 
   const { solvers, isLoading, error } = useSolvers(timeWindow);
+  const { items } = useIntentFeed();
+  const itemsBySolver = useMemo(() => {
+    const map: Record<string, FeedItem[]> = {};
+    for (const item of items) {
+      if (!item.solver) continue;
+      const addr = normalizeAddress(item.solver);
+      if (!map[addr]) map[addr] = [];
+      map[addr].push(item);
+    }
+    return map;
+  }, [items]);
   const { visibility, toggle, isToggleable } = useColumnVisibility<ColumnId>(
     "vortex:leaderboard-columns",
     COLUMN_IDS,
@@ -146,6 +199,7 @@ export function SolverLeaderboard() {
     name: t("solve.leaderboard.solver"),
     fills: t("solve.leaderboard.fills"),
     volumeUsd: t("solve.leaderboard.volume"),
+    volumeTrend: t("solve.leaderboard.trend"),
     successRate: t("solve.leaderboard.success"),
     avgFillTimeSeconds: t("solve.leaderboard.avgTime"),
     bondUsd: t("solve.leaderboard.bond"),
@@ -167,6 +221,18 @@ export function SolverLeaderboard() {
     { id: "fills", header: headers.fills, sortable: true, align: "right", cell: (s) => <span className="num">{nf.format(s.fills)}</span> },
     { id: "volumeUsd", header: headers.volumeUsd, sortable: true, align: "right", cell: (s) => <span className="num">{usd.format(s.volumeUsd)}</span> },
     {
+      id: "volumeTrend",
+      header: headers.volumeTrend,
+      sortable: false,
+      align: "center",
+      cell: (s) => (
+        <SolverVolumeSparkline
+          solver={s}
+          fills={itemsBySolver[normalizeAddress(s.address)] ?? []}
+        />
+      ),
+    },
+    {
       id: "successRate",
       header: headers.successRate,
       sortable: true,
@@ -187,6 +253,9 @@ export function SolverLeaderboard() {
     const value = (s: RankedSolver, id: ColumnId): string | number => {
       if (id === "name") return sanitizeDisplayText(s.name);
       if (id === "successRate") return s.successRate.toFixed(1);
+      if (id === "volumeTrend") {
+        return (itemsBySolver[normalizeAddress(s.address)] ?? []).length;
+      }
       return s[id];
     };
     const csv = buildCsv(
